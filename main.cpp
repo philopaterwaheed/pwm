@@ -3,6 +3,7 @@
 #include <vector>
 #include <iostream>
 #include <X11/keysym.h>  // Add this line for XK_Escape
+#include <X11/Xcursor/Xcursor.h>
 
 int main() {
     Display* display = XOpenDisplay(nullptr);
@@ -13,6 +14,11 @@ int main() {
 
     int screen = DefaultScreen(display);
     Window rootWindow = RootWindow(display, screen);
+    // Create the cursor
+    Cursor cursor = XCreateFontCursor(display, XCURSOR_LIB_MAJOR);
+
+    // Set the cursor for the window
+    XDefineCursor(display, rootWindow, cursor);
 
     // Create a new window
     Window window = XCreateSimpleWindow(display, rootWindow, 100, 100, 400, 300, 1,

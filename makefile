@@ -1,3 +1,3 @@
 all:
-	g++ main.cpp -lX11 -o pwm
+	g++ main.cpp -lX11 -lXcursor -o pwm
 	cp pwm /bin/
