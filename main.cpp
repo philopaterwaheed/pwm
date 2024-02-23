@@ -21,8 +21,10 @@ int main() {
     // vector of windows
     std :: vector<Window> windows;
     // Set window properties
-    XSelectInput(display, window, ExposureMask | KeyPressMask);
-    XMapWindow(display, window);
+    // windows.push_back(window);
+    XSelectInput(display, rootWindow, ExposureMask | KeyPressMask);
+    // XMapWindow(display, vwindows[0]);
+    XSetInputFocus(display, rootWindow, RevertToPointerRoot, CurrentTime);
 
     XEvent event;
     while (true) {
@@ -48,10 +50,12 @@ int main() {
 		}
                 if (event.xkey.keycode == XKeysymToKeycode(display, XK_Escape)) {
 		     XCloseDisplay(display);
-                    // return 0;
-}
+                     return 0;
+		}
                 break;
         }
+	// if (windows.size() == 0 )
+	    // return 0;
     }
 
     XCloseDisplay(display);
