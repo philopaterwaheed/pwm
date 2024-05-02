@@ -15,7 +15,7 @@ int main() {
     int screen = DefaultScreen(display);
     Window rootWindow = RootWindow(display, screen);
     // Create the cursor
-    Cursor cursor = XCreateFontCursor(display, XCURSOR_LIB_MAJOR);
+    Cursor cursor = XCreateFontCursor(display, 69);
 
     // Set the cursor for the window
     XDefineCursor(display, rootWindow, cursor);
