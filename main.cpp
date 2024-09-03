@@ -5,6 +5,32 @@
 #include <X11/keysym.h>  // Add this line for XK_Escape
 #include <X11/Xcursor/Xcursor.h>
 
+// client running struct
+struct Client 
+{
+	int x;
+	int y;
+	Window window;
+	unsigned int width , height;
+};
+
+std::vector<Client> clients;
+
+Client *get_client(Window window){
+    for (auto &client : clients) {
+        if (client.window == window)
+            return &client;
+    }
+    return nullptr;
+}
+
+void handle_map_request(Display *display, XMapRequestEvent &event) {
+	Client client;
+	client.window = event.window;
+	XGetGeometry(display, event.window, &client.window, &client.x, &client.y, &client.width, &client.height, nullptr, nullptr);
+	clients.push_back(client);
+	XMapWindow(display, event.window);
+}
 int main() {
     Display* display = XOpenDisplay(nullptr);
     if (!display) {
