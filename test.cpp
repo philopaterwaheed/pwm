@@ -11,6 +11,7 @@
 
 Display *display;
 Window root;
+Window focused_window = None;
 
 struct Client {
   Window window;
@@ -29,6 +30,23 @@ Client *find_client(Window w) {
   return nullptr;
 }
 
+void handle_focus_in(XEvent *e) {
+  XFocusChangeEvent *ev = &e->xfocus;
+  focused_window = ev->window; // Set the focused window
+}
+
+void kill_focused_window() {
+  if (focused_window != None) {
+    XKillClient(display, focused_window);
+    focused_window = None; // Reset focused window
+  }
+}
+
+void handle_enter_notify(XEvent *e) {
+  XEnterWindowEvent *ev = &e->xcrossing;
+  focused_window = ev->window; // Set the focused window on mouse enter
+  XSetInputFocus(display, focused_window, RevertToParent, CurrentTime);
+}
 void handle_map_request(XEvent *e) {
   XMapRequestEvent *ev = &e->xmaprequest;
   XWindowAttributes wa;
@@ -72,10 +90,12 @@ void lunch(std::string arg) {
                      // process doesn't need to maintain the X connection—it
                      // will execute a new program.
     setsid();
-		//    function call creates a new session and sets the child process as the
-		//    session leader. This detaches the child process from the terminal (if
-		//    any) and makes it independent of the parent process group.
+    //    function call creates a new session and sets the child process as the
+    //    session leader. This detaches the child process from the terminal (if
+    //    any) and makes it independent of the parent process group.
     execlp(arg.c_str(), arg.c_str(), nullptr);
+    // The execlp() function replaces the current process image with a new
+    // process
     fprintf(stderr, "Failed to launch st\n");
     exit(1);
   }
@@ -91,6 +111,9 @@ void handle_key_press(XEvent *e) {
     if (XKeysymToKeycode(display, XStringToKeysym("t")) == ev->keycode) {
       lunch("st");
     }
+    if (XKeysymToKeycode(display, XStringToKeysym("r")) == ev->keycode) {
+      kill_focused_window();
+    }
   }
 }
 
@@ -105,6 +128,12 @@ void run() {
     case ConfigureRequest:
       // this event is sent when a window wants to change its size/position
       handle_configure_request(&ev);
+      break;
+    case FocusIn:
+      handle_focus_in(&ev);
+      break;
+    case EnterNotify:
+      handle_enter_notify(&ev);
       break;
     case KeyPress:
       handle_key_press(&ev);
@@ -126,13 +155,17 @@ int main() {
   XSelectInput(display, root,
                SubstructureRedirectMask | SubstructureNotifyMask);
 
+  Cursor cursor =                    // not for future evry action needs a shape
+      XCreateFontCursor(display, 2); // Set the cursor for the window
+  XDefineCursor(display, root, cursor);
   // Capture key presses for the mod key (e.g., Mod4Mask) with any key
   // it only lets the window manager to listen to the key presses we specify
   XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("q")), MOD, root,
            True, GrabModeAsync, GrabModeAsync);
   XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("t")), MOD, root,
            True, GrabModeAsync, GrabModeAsync);
-
+  XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("r")), MOD, root,
+           True, GrabModeAsync, GrabModeAsync);
   run();
 
   XCloseDisplay(display);
