@@ -1,5 +1,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -9,18 +10,20 @@
 
 #define MOD Mod4Mask // Usually the Windows key
 
-Display *display;
-Window root;
+Display *display; // the connection to the X server
+Window root; // the root window top level window all other windows are children
+             // of it and covers all the screen
 Window focused_window = None;
 
 struct Client {
-  Window window;
+  Window window; // the window id
   int x, y;
   unsigned int width, height;
 };
 
-std::vector<Client> clients;
+std::vector<Client> clients; // the clients vector
 
+// Find a client by its window id and return a pointer to it
 Client *find_client(Window w) {
   for (auto &client : clients) {
     if (client.window == w) {
@@ -39,9 +42,15 @@ void kill_focused_window() {
   if (focused_window != None) {
     XKillClient(display, focused_window);
     focused_window = None; // Reset focused window
+    clients.erase(std::remove_if(clients.begin(), clients.end(),
+                                 [](const Client &c) {
+                                   return c.window == focused_window;
+                                 }),
+                  clients.end());
   }
 }
 
+// handle the mouse enter event
 void handle_enter_notify(XEvent *e) {
   XEnterWindowEvent *ev = &e->xcrossing;
   focused_window = ev->window; // Set the focused window on mouse enter
@@ -79,6 +88,28 @@ void handle_configure_request(XEvent *e) {
   XConfigureWindow(display, ev->window, ev->value_mask, &changes);
 }
 
+void resize_focused_window(int delta_width, int delta_height) {
+  if (focused_window != None && focused_window != root) {
+    XWindowChanges changes;
+
+    // Get the current window attributes to calculate the new size
+    XWindowAttributes wa;
+    XGetWindowAttributes(display, focused_window, &wa);
+
+    // Adjust width and height based on delta
+    changes.width = wa.width + delta_width;
+    changes.height = wa.height + delta_height;
+
+    // Prevent the window from being resized too small
+    if (changes.width < 100)
+      changes.width = 100;
+    if (changes.height < 100)
+      changes.height = 100;
+
+    // Apply the new size to the window
+    XConfigureWindow(display, focused_window, CWWidth | CWHeight, &changes);
+  }
+}
 void lunch(std::string arg) {
   if (fork() == 0) {
     if (display)
@@ -113,6 +144,20 @@ void handle_key_press(XEvent *e) {
     }
     if (XKeysymToKeycode(display, XStringToKeysym("r")) == ev->keycode) {
       kill_focused_window();
+    }
+    // Resizing based on arrow keys
+    //
+    if (XKeysymToKeycode(display, XStringToKeysym("Left")) == ev->keycode) {
+      resize_focused_window(-20, 0); // Shrink width by 20 pixels
+    }
+    if (XKeysymToKeycode(display, XStringToKeysym("Right")) == ev->keycode) {
+      resize_focused_window(20, 0); // Increase width by 20 pixels
+    }
+    if (XKeysymToKeycode(display, XStringToKeysym("Up")) == ev->keycode) {
+      resize_focused_window(0, -20); // Shrink height by 20 pixels
+    }
+    if (XKeysymToKeycode(display, XStringToKeysym("Down")) == ev->keycode) {
+      resize_focused_window(0, 20); // Increase height by 20 pixels
     }
   }
 }
@@ -166,6 +211,15 @@ int main() {
            True, GrabModeAsync, GrabModeAsync);
   XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("r")), MOD, root,
            True, GrabModeAsync, GrabModeAsync);
+  XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("Left")), MOD,
+           root, True, GrabModeAsync, GrabModeAsync);
+  XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("Right")), MOD,
+           root, True, GrabModeAsync, GrabModeAsync);
+  XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("Up")), MOD, root,
+           True, GrabModeAsync, GrabModeAsync);
+  XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("Down")), MOD,
+           root, True, GrabModeAsync, GrabModeAsync);
+
   run();
 
   XCloseDisplay(display);
