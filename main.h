@@ -49,6 +49,8 @@ void handle_key_press(XEvent *e);
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg* arg);
 void resize_focused_window_y(const Arg* arg);
+void move_focused_window_x(const Arg *arg) ;
+void move_focused_window_y(const Arg* arg);
 void kill_focused_window(const Arg* arg);
 void exit_pwm(const Arg* arg);
 void lunch(const Arg * arg);
