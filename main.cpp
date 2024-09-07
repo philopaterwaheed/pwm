@@ -30,13 +30,15 @@ void handle_focus_in(XEvent *e) {
 void kill_focused_window(const Arg *arg) {
   (void)arg;
   if (focused_window != None) {
-    XKillClient(display, focused_window);
-    focused_window = None; // Reset focused window
     clients.erase(std::remove_if(clients.begin(), clients.end(),
                                  [](const Client &c) {
                                    return c.window == focused_window;
                                  }),
                   clients.end());
+    XKillClient(display, focused_window);
+    focused_window = None; // Reset focused window
+                           //
+    tile_windows();
   }
 }
 
@@ -60,6 +62,7 @@ void handle_map_request(XEvent *e) {
   clients.push_back({ev->window, wa.x, wa.y,
                      static_cast<unsigned int>(wa.width),
                      static_cast<unsigned int>(wa.height)});
+  tile_windows();
 }
 
 void handle_configure_request(XEvent *e) {
@@ -126,7 +129,7 @@ void move_focused_window_x(const Arg *arg) {
     XGetWindowAttributes(display, focused_window, &wa);
 
     changes.x = wa.x + arg->i;
-    XConfigureWindow(display, focused_window, CWX , &changes);
+    XConfigureWindow(display, focused_window, CWX, &changes);
   }
 }
 void move_focused_window_y(const Arg *arg) {
@@ -136,7 +139,7 @@ void move_focused_window_y(const Arg *arg) {
     XGetWindowAttributes(display, focused_window, &wa);
 
     changes.y = wa.y + arg->i;
-    XConfigureWindow(display, focused_window,  CWY, &changes);
+    XConfigureWindow(display, focused_window, CWY, &changes);
   }
 }
 void lunch(const Arg *arg) {
@@ -229,6 +232,56 @@ int main() {
   XCloseDisplay(display);
   return 0;
 }
+void tile_windows() {
+  unsigned int num_tiled_clients = 0;
+
+  for (auto &client : clients) {
+    if (!client.floating) {
+      ++num_tiled_clients;
+    }
+  }
+
+  if (num_tiled_clients == 0)
+    return;
+
+  int screen_width = DisplayWidth(display, DefaultScreen(display));
+  int screen_height = DisplayHeight(display, DefaultScreen(display));
+
+  int master_width = screen_width * 0.6;
+
+  unsigned int tiled_index = 0;
+  for (unsigned int i = 0; i < clients.size(); ++i) {
+    Client *c = &clients[i];
+    if (c->floating) {
+      // Skip floating windows
+      continue;
+    }
+
+    if (tiled_index == 0) {
+      // Master window
+      XMoveResizeWindow(display, c->window, 0, 0, master_width, screen_height);
+    } else {
+      // Stack windows
+      int stack_height = screen_height / (num_tiled_clients - 1);
+      XMoveResizeWindow(display, c->window, master_width,
+                        (tiled_index - 1) * stack_height,
+                        screen_width - master_width, stack_height);
+    }
+    ++tiled_index;
+  }
+}
+
+void toggle_floating(const Arg *arg) {
+  if (focused_window == None)
+    return;
+
+  Client *client = find_client(focused_window);
+  if (client) {
+    client->floating = !client->floating; // Toggle floating
+    tile_windows();                       // Rearrange windows
+  }
+}
+
 void exit_pwm(const Arg *arg) {
   free(display);
   exit(0);
