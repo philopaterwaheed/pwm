@@ -118,6 +118,27 @@ void resize_focused_window_x(const Arg *arg) {
     XConfigureWindow(display, focused_window, CWWidth, &changes);
   }
 }
+
+void move_focused_window_x(const Arg *arg) {
+  if (focused_window != None && focused_window != root) {
+    XWindowChanges changes;
+    XWindowAttributes wa;
+    XGetWindowAttributes(display, focused_window, &wa);
+
+    changes.x = wa.x + arg->i;
+    XConfigureWindow(display, focused_window, CWX , &changes);
+  }
+}
+void move_focused_window_y(const Arg *arg) {
+  if (focused_window != None && focused_window != root) {
+    XWindowChanges changes;
+    XWindowAttributes wa;
+    XGetWindowAttributes(display, focused_window, &wa);
+
+    changes.y = wa.y + arg->i;
+    XConfigureWindow(display, focused_window,  CWY, &changes);
+  }
+}
 void lunch(const Arg *arg) {
   auto args = (char **)arg->v;
   if (fork() == 0) {
@@ -146,7 +167,7 @@ void handle_key_press(XEvent *e) {
   for (auto shortcut : shortcuts) {
     // the state is a bit mask and is true only when the key is mod
     if (ev->keycode == XKeysymToKeycode(display, shortcut.key) &&
-        (ev->state & shortcut.mask) && shortcut.func)
+        (CLEANMASK(ev->state) == CLEANMASK(shortcut.mask)) && shortcut.func)
       shortcut.func(&(shortcut.arg));
   }
 }
@@ -179,8 +200,8 @@ void run() {
 void grab_keys() {
   // it only lets the window manager to listen to the key presses we specify
   for (auto shortcut : shortcuts) {
-    XGrabKey(display, XKeysymToKeycode(display, shortcut.key), MOD|SHIFT, root, True,
-             GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, XKeysymToKeycode(display, shortcut.key), shortcut.mask,
+             root, True, GrabModeAsync, GrabModeAsync);
   }
 }
 int main() {
