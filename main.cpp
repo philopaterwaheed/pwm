@@ -1,7 +1,9 @@
 
 #include "main.h"
 #include "config.h"
-#include <any>
+#include <X11/X.h>
+#include <X11/Xlib.h>
+#include <iostream>
 
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
@@ -25,7 +27,8 @@ void handle_focus_in(XEvent *e) {
   focused_window = ev->window; // Set the focused window
 }
 
-void kill_focused_window() {
+void kill_focused_window(const Arg *arg) {
+  (void)arg;
   if (focused_window != None) {
     XKillClient(display, focused_window);
     focused_window = None; // Reset focused window
@@ -75,7 +78,7 @@ void handle_configure_request(XEvent *e) {
   XConfigureWindow(display, ev->window, ev->value_mask, &changes);
 }
 
-void resize_focused_window(int delta_width, int delta_height) {
+void resize_focused_window_y(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
     XWindowChanges changes;
 
@@ -84,20 +87,39 @@ void resize_focused_window(int delta_width, int delta_height) {
     XGetWindowAttributes(display, focused_window, &wa);
 
     // Adjust width and height based on delta
-    changes.width = wa.width + delta_width;
-    changes.height = wa.height + delta_height;
+    changes.height = wa.height + arg->i;
+    changes.width = 0;
 
     // Prevent the window from being resized too small
-    if (changes.width < 100)
-      changes.width = 100;
     if (changes.height < 100)
       changes.height = 100;
 
     // Apply the new size to the window
-    XConfigureWindow(display, focused_window, CWWidth | CWHeight, &changes);
+    XConfigureWindow(display, focused_window, CWHeight, &changes);
   }
 }
-void lunch(char **args) {
+void resize_focused_window_x(const Arg *arg) {
+  if (focused_window != None && focused_window != root) {
+    XWindowChanges changes;
+
+    // Get the current window attributes to calculate the new size
+    XWindowAttributes wa;
+    XGetWindowAttributes(display, focused_window, &wa);
+
+    // Adjust width and height based on delta
+    changes.width = wa.width + arg->i;
+    changes.height = 0;
+
+    // Prevent the window from being resized too small
+    if (changes.width < 100)
+      changes.width = 100;
+
+    // Apply the new size to the window
+    XConfigureWindow(display, focused_window, CWWidth, &changes);
+  }
+}
+void lunch(const Arg *arg) {
+  auto args = (char **)arg->v;
   if (fork() == 0) {
     if (display)
       close(ConnectionNumber(
@@ -121,14 +143,11 @@ void lunch(char **args) {
 
 void handle_key_press(XEvent *e) {
   XKeyEvent *ev = &e->xkey;
-  for (auto shorcut : shorcuts) {
-    if (ev->state &
-        MOD) { // the state is a bit mask and is true only when the key is mod
-      if (ev->state & shorcut.mask &&
-           shorcut.key == ev->keycode) {
-        shorcut.func(shorcut.arg);
-      }
-    }
+  for (auto shortcut : shortcuts) {
+    // the state is a bit mask and is true only when the key is mod
+    if (ev->keycode == XKeysymToKeycode(display, shortcut.key) &&
+        (ev->state & shortcut.mask) && shortcut.func)
+      shortcut.func(&(shortcut.arg));
   }
 }
 
@@ -158,9 +177,10 @@ void run() {
 }
 
 void grab_keys() {
-  for (auto shortcut : shorcuts) {
-	XGrabKey(display,shortcut.key,
-			 MOD, root, True, GrabModeAsync, GrabModeAsync);
+  // it only lets the window manager to listen to the key presses we specify
+  for (auto shortcut : shortcuts) {
+    XGrabKey(display, XKeysymToKeycode(display, shortcut.key), MOD|SHIFT, root, True,
+             GrabModeAsync, GrabModeAsync);
   }
 }
 int main() {
@@ -174,17 +194,21 @@ int main() {
 
   // Subscribe to events on the root window
   XSelectInput(display, root,
-               SubstructureRedirectMask | SubstructureNotifyMask);
+               SubstructureRedirectMask | SubstructureNotifyMask |
+                   KeyPressMask | ExposureMask);
 
   Cursor cursor =                    // not for future evry action needs a shape
       XCreateFontCursor(display, 2); // Set the cursor for the window
   XDefineCursor(display, root, cursor);
   // Capture key presses for the mod key (e.g., Mod4Mask) with any key
-  // it only lets the window manager to listen to the key presses we specify
 
   grab_keys();
   run();
 
   XCloseDisplay(display);
   return 0;
+}
+void exit_pwm(const Arg *arg) {
+  free(display);
+  exit(0);
 }
