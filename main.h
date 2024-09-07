@@ -24,7 +24,7 @@ static unsigned int numlockmask = 0;
 struct Client {
   Window window; // the window id
   int x, y;
-  unsigned int width, height;
+  unsigned int width, height, index;
   bool floating = false; // Indicates whether the window is floating or tiled
 };
 
@@ -45,6 +45,7 @@ struct shortcut {
 };
 
 Client *find_client(Window w);
+int get_focused_window_index();
 void tile_windows();
 void handle_focus_in(XEvent *e);
 void handle_enter_notify(XEvent *e);
@@ -59,4 +60,5 @@ void move_focused_window_y(const Arg *arg);
 void kill_focused_window(const Arg *arg);
 void exit_pwm(const Arg *arg);
 void lunch(const Arg *arg);
-void toggle_floating(const Arg *arg) ;
+void toggle_floating(const Arg *arg);
+void swap_window(const Arg *arg) ;
