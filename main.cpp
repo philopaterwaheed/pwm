@@ -142,6 +142,25 @@ void move_focused_window_y(const Arg *arg) {
     XConfigureWindow(display, focused_window, CWY, &changes);
   }
 }
+void swap_window(const Arg *arg) {
+  int index1 = get_focused_window_index(), index2 = index1 + arg->i;
+  index2 = index2 < 0 ? clients.size() - 1 : index2;
+  index2 = index2 >= clients.size() ? 0 : index2;
+  if (index1 < clients.size() && index2 < clients.size()) {
+    std::swap(clients[index1], clients[index2]);
+    tile_windows(); // Rearrange windows after swapping
+  }
+}
+
+// Get the index of the focused window
+int get_focused_window_index() {
+  for (unsigned int i = 0; i < clients.size(); ++i) {
+    if (clients[i].window == focused_window) {
+      return i;
+    }
+  }
+  return -1; // Not found
+}
 void lunch(const Arg *arg) {
   auto args = (char **)arg->v;
   if (fork() == 0) {
