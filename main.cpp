@@ -3,12 +3,12 @@
 #include "config.h"
 #include <X11/X.h>
 #include <X11/Xlib.h>
-#include <iostream>
+#include <cstdlib>
 
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
-Window focused_window = None, master_window = None;
+Window focused_window = None, master_window = None ;
 
 std::vector<Client> clients; // the clients vector
 
@@ -22,10 +22,10 @@ Client *find_client(Window w) {
   return nullptr;
 }
 
-void handle_focus_in(XEvent *e) {
-  XFocusChangeEvent *ev = &e->xfocus;
-  focused_window = ev->window; // Set the focused window
-}
+/* void handle_focus_in(XEvent *e) { */
+/*   XFocusChangeEvent *ev = &e->xfocus; */
+/*   focused_window = ev->window; // Set the focused window */
+/* } */
 
 void kill_focused_window(const Arg *arg) {
   (void)arg;
@@ -45,8 +45,10 @@ void kill_focused_window(const Arg *arg) {
 // handle the mouse enter event
 void handle_enter_notify(XEvent *e) {
   XEnterWindowEvent *ev = &e->xcrossing;
-  focused_window = ev->window; // Set the focused window on mouse enter
-  XSetInputFocus(display, focused_window, RevertToParent, CurrentTime);
+  if (ev->mode == NotifyNormal && ev->detail != NotifyInferior) {
+    XSetInputFocus(display, ev->window, RevertToPointerRoot, CurrentTime);
+    focused_window = ev->window; // Set the focused window on mouse enter
+  }
 }
 void handle_map_request(XEvent *e) {
   XMapRequestEvent *ev = &e->xmaprequest;
@@ -128,22 +130,22 @@ void move_focused_window_x(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
     XWindowChanges changes;
     XWindowAttributes wa;
+    XSetInputFocus(display, focused_window, RevertToPointerRoot, CurrentTime);
     XGetWindowAttributes(display, focused_window, &wa);
 
     changes.x = wa.x + arg->i;
     XConfigureWindow(display, focused_window, CWX, &changes);
-    warp_pointer_to_window(focused_window);
   }
 }
 void move_focused_window_y(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
     XWindowChanges changes;
     XWindowAttributes wa;
+    XSetInputFocus(display, focused_window, RevertToPointerRoot, CurrentTime);
     XGetWindowAttributes(display, focused_window, &wa);
 
     changes.y = wa.y + arg->i;
     XConfigureWindow(display, focused_window, CWY, &changes);
-    warp_pointer_to_window(focused_window);
   }
 }
 void swap_window(const Arg *arg) {
@@ -152,7 +154,7 @@ void swap_window(const Arg *arg) {
   index2 = index2 >= clients.size() ? 0 : index2;
   if (index1 < clients.size() && index2 < clients.size()) {
     std::swap(clients[index1], clients[index2]);
-    warp_pointer_to_window(focused_window);
+    /* warp_pointer_to_window(focused_window); */
     tile_windows(); // Rearrange windows after swapping
   }
 }
@@ -170,9 +172,11 @@ int get_focused_window_index() {
 void warp_pointer_to_window(Window win) {
   XWindowAttributes wa;
   XGetWindowAttributes(display, win, &wa);
-  int x = wa.x + wa.width / 2;
-  int y = wa.y + wa.height / 2;
+  int x =  wa.width / 2;
+  int y =  wa.height / 2;
   XWarpPointer(display, None, win, 0, 0, 0, 0, x, y);
+}
+void restack_windows() {
 }
 void lunch(const Arg *arg) {
   auto args = (char **)arg->v;
@@ -204,6 +208,7 @@ void handle_key_press(XEvent *e) {
         (CLEANMASK(ev->state) == CLEANMASK(shortcut.mask)) && shortcut.func)
       shortcut.func(&(shortcut.arg));
   }
+  restack_windows();
 }
 
 void run() {
@@ -218,14 +223,16 @@ void run() {
       // this event is sent when a window wants to change its size/position
       handle_configure_request(&ev);
       break;
-    case FocusIn:
-      handle_focus_in(&ev);
-      break;
+    /* case FocusIn: */
+    /*   handle_focus_in(&ev); */
+    /*   break; */
     case EnterNotify:
       handle_enter_notify(&ev);
       break;
     case KeyPress:
       handle_key_press(&ev);
+      break;
+    case PropertyNotify:
       break;
     }
   }
@@ -250,7 +257,7 @@ int main() {
   // Subscribe to events on the root window
   XSelectInput(display, root,
                SubstructureRedirectMask | SubstructureNotifyMask |
-                   KeyPressMask | ExposureMask);
+                   KeyPressMask | ExposureMask | PropertyChangeMask);
 
   Cursor cursor =                    // not for future evry action needs a shape
       XCreateFontCursor(display, 2); // Set the cursor for the window
@@ -265,6 +272,8 @@ int main() {
 }
 void tile_windows() {
   unsigned int num_tiled_clients = 0;
+  std::vector<int>
+      floating_clients; // for the index of floatings not  to do it twice
 
   for (auto &client : clients) {
     if (!client.floating) {
@@ -285,6 +294,7 @@ void tile_windows() {
     Client *c = &clients[i];
     if (c->floating) {
       // Skip floating windows
+      floating_clients.push_back(i);
       continue;
     }
 
@@ -300,9 +310,9 @@ void tile_windows() {
     }
     ++tiled_index;
   }
-  for (unsigned int i = 0; i < clients.size(); ++i) {
-    if (clients[i].floating) {
-      XRaiseWindow(display, clients[i].window);
+  for (unsigned int i = 0; i < floating_clients.size(); ++i) {
+    if (clients[floating_clients[i]].floating) {
+      XRaiseWindow(display, clients[floating_clients[i]].window);
     }
   }
 }
@@ -315,15 +325,16 @@ void toggle_floating(const Arg *arg) {
   if (client) {
     client->floating = !client->floating; // Toggle floating
     if (client->floating) {
-    	  XWindowAttributes wa;
-    	  XGetWindowAttributes(display, focused_window, &wa);
-    	  client->x = wa.x;
-    	  client->y = wa.y;
-    	  client->width = wa.width;
-    	  client->height = wa.height;
-    	  XMoveResizeWindow(display, focused_window, 100, 100, 800, 600); // not for future me make rule in this 
-    	  XRaiseWindow(display, focused_window);
-    	}     	
+      XWindowAttributes wa;
+      XGetWindowAttributes(display, focused_window, &wa);
+      client->x = wa.x;
+      client->y = wa.y;
+      client->width = wa.width;
+      client->height = wa.height;
+      XMoveResizeWindow(display, focused_window, 100, 100, 800,
+                        600); // not for future me make rule in this
+      XRaiseWindow(display, focused_window);
+    }
     tile_windows(); // Rearrange windows
   }
 }
