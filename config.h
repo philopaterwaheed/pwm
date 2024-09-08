@@ -12,7 +12,7 @@ static std::vector<shortcut> shortcuts = {
     {MOD, XK_t, lunch, {.v = term}},
     {MOD, XK_Print, lunch, {.v = s_shot}},
     {MOD | ShiftMask, XK_q, exit_pwm, {0}},
-    {MOD | ShiftMask, XK_space, exit_pwm, {0}},
+    {MOD | ShiftMask, XK_space, toggle_floating, {0}},
     {MOD, XK_Right, resize_focused_window_x, {.i = +20}},
     {MOD, XK_Left, resize_focused_window_x, {.i = -20}},
     {MOD, XK_Down, resize_focused_window_y, {.i = +20}},
