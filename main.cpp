@@ -8,7 +8,7 @@
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
-Window focused_window = None, master_window = None ;
+Window focused_window = None, master_window = None;
 
 std::vector<Client> clients; // the clients vector
 
@@ -101,7 +101,7 @@ void resize_focused_window_y(const Arg *arg) {
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWHeight, &changes);
-    warp_pointer_to_window(focused_window);
+    warp_pointer_to_window(&focused_window);
   }
 }
 void resize_focused_window_x(const Arg *arg) {
@@ -122,7 +122,7 @@ void resize_focused_window_x(const Arg *arg) {
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWWidth, &changes);
-    warp_pointer_to_window(focused_window);
+    warp_pointer_to_window(&focused_window);
   }
 }
 
@@ -133,8 +133,11 @@ void move_focused_window_x(const Arg *arg) {
     XSetInputFocus(display, focused_window, RevertToPointerRoot, CurrentTime);
     XGetWindowAttributes(display, focused_window, &wa);
 
+    Window dummy = focused_window; // for if the window changed focus after moving 
     changes.x = wa.x + arg->i;
     XConfigureWindow(display, focused_window, CWX, &changes);
+    XConfigureWindow(display, dummy, CWX, &changes);
+    warp_pointer_to_window(&dummy);
   }
 }
 void move_focused_window_y(const Arg *arg) {
@@ -143,9 +146,11 @@ void move_focused_window_y(const Arg *arg) {
     XWindowAttributes wa;
     XSetInputFocus(display, focused_window, RevertToPointerRoot, CurrentTime);
     XGetWindowAttributes(display, focused_window, &wa);
-
+    Window dummy = focused_window; // for if the window changed focus after moving 
     changes.y = wa.y + arg->i;
     XConfigureWindow(display, focused_window, CWY, &changes);
+    XConfigureWindow(display, dummy, CWY, &changes);
+    warp_pointer_to_window(&dummy);
   }
 }
 void swap_window(const Arg *arg) {
@@ -156,6 +161,7 @@ void swap_window(const Arg *arg) {
     std::swap(clients[index1], clients[index2]);
     /* warp_pointer_to_window(focused_window); */
     tile_windows(); // Rearrange windows after swapping
+    warp_pointer_to_window(&clients[index2].window);
   }
 }
 
@@ -169,15 +175,14 @@ int get_focused_window_index() {
   return -1; // Not found
 }
 
-void warp_pointer_to_window(Window win) {
+void warp_pointer_to_window(Window* win) {
   XWindowAttributes wa;
-  XGetWindowAttributes(display, win, &wa);
-  int x =  wa.width / 2;
-  int y =  wa.height / 2;
-  XWarpPointer(display, None, win, 0, 0, 0, 0, x, y);
+  XGetWindowAttributes(display, *win, &wa);
+  int x = wa.width / 2;
+  int y = wa.height / 2;
+  XWarpPointer(display, None, *win, 0, 0, 0, 0, x, y);
 }
-void restack_windows() {
-}
+void restack_windows() {}
 void lunch(const Arg *arg) {
   auto args = (char **)arg->v;
   if (fork() == 0) {
@@ -271,72 +276,94 @@ int main() {
   return 0;
 }
 void tile_windows() {
-  unsigned int num_tiled_clients = 0;
-  std::vector<int>
-      floating_clients; // for the index of floatings not  to do it twice
+    unsigned int num_tiled_clients = 0;
+    std::vector<int> floating_clients; // Index of floating windows
 
-  for (auto &client : clients) {
-    if (!client.floating) {
-      ++num_tiled_clients;
-    }
-  }
-
-  if (num_tiled_clients == 0)
-    return;
-
-  int screen_width = DisplayWidth(display, DefaultScreen(display));
-  int screen_height = DisplayHeight(display, DefaultScreen(display));
-
-  int master_width = screen_width * 0.6;
-
-  unsigned int tiled_index = 0;
-  for (unsigned int i = 0; i < clients.size(); ++i) {
-    Client *c = &clients[i];
-    if (c->floating) {
-      // Skip floating windows
-      floating_clients.push_back(i);
-      continue;
+    // First, count the number of non-floating (tiled) clients
+    for (auto &client : clients) {
+        if (!client.floating) {
+            ++num_tiled_clients;
+        }
     }
 
-    if (tiled_index == 0) { // make a master here
-      // Master window
-      XMoveResizeWindow(display, c->window, 0, 0, master_width, screen_height);
-    } else {
-      // Stack windows
-      int stack_height = screen_height / (num_tiled_clients - 1);
-      XMoveResizeWindow(display, c->window, master_width,
-                        (tiled_index - 1) * stack_height,
-                        screen_width - master_width, stack_height);
+    // If there are no tiled clients, we don't need to arrange anything
+    if (num_tiled_clients == 0)
+        return;
+
+    int screen_width = DisplayWidth(display, DefaultScreen(display));
+    int screen_height = DisplayHeight(display, DefaultScreen(display));
+
+    // Calculate master width (60% of screen width)
+    int master_width = screen_width * 0.6;
+
+    unsigned int tiled_index = 0; // To track the position of tiled clients
+    for (unsigned int i = 0; i < clients.size(); ++i) {
+        Client *c = &clients[i];
+        if (c->floating) {
+            // Skip floating windows and store their indices for later raising
+            floating_clients.push_back(i);
+            continue;
+        }
+
+        if (tiled_index == 0) { // First window is the master
+            // Master window positioning
+            XMoveResizeWindow(
+                display, c->window, GAP_SIZE, GAP_SIZE,                // Position with gaps
+                master_width - 2 * GAP_SIZE,                           // Width with gaps
+                screen_height - 2 * GAP_SIZE);                         // Full height with gaps
+        } else {
+            // Stack windows positioning
+            int stack_width = screen_width - master_width - 2 * GAP_SIZE;
+            int stack_height = (screen_height / (num_tiled_clients - 1)) - GAP_SIZE;
+            int x = master_width + GAP_SIZE; // Stacked on the right
+            int y = (tiled_index - 1) * (stack_height + GAP_SIZE) + GAP_SIZE;
+
+            XMoveResizeWindow(
+                display, c->window, x, y,                             // Position with gaps
+                stack_width,                                          // Width with gaps
+                stack_height - GAP_SIZE);                             // Height with gaps between stack windows
+        }
+
+        ++tiled_index; // Only increment for non-floating windows
     }
-    ++tiled_index;
-  }
-  for (unsigned int i = 0; i < floating_clients.size(); ++i) {
-    if (clients[floating_clients[i]].floating) {
-      XRaiseWindow(display, clients[floating_clients[i]].window);
+
+    // After arranging tiled windows, raise all floating windows
+    for (unsigned int i = 0; i < floating_clients.size(); ++i) {
+        XRaiseWindow(display, clients[floating_clients[i]].window);
     }
-  }
 }
 
 void toggle_floating(const Arg *arg) {
-  if (focused_window == None)
-    return;
+    if (focused_window == None)
+        return;
 
-  Client *client = find_client(focused_window);
-  if (client) {
-    client->floating = !client->floating; // Toggle floating
-    if (client->floating) {
-      XWindowAttributes wa;
-      XGetWindowAttributes(display, focused_window, &wa);
-      client->x = wa.x;
-      client->y = wa.y;
-      client->width = wa.width;
-      client->height = wa.height;
-      XMoveResizeWindow(display, focused_window, 100, 100, 800,
-                        600); // not for future me make rule in this
-      XRaiseWindow(display, focused_window);
+    Client *client = find_client(focused_window);
+    if (client) {
+        // Toggle the floating status of the focused window
+        client->floating = !client->floating;
+
+        if (client->floating) {
+            // Get the current window's geometry before making it float
+            XWindowAttributes wa;
+            XGetWindowAttributes(display, focused_window, &wa);
+            client->x = wa.x;
+            client->y = wa.y;
+            client->width = wa.width;
+            client->height = wa.height;
+
+            // Resize and move the window to some default position (e.g., 100, 100)
+            XMoveResizeWindow(display, focused_window, 100, 100, 800, 600);
+
+            // Ensure the floating window is raised above other windows
+            XRaiseWindow(display, focused_window);
+        }
+
+        // Rearrange windows after toggling floating
+        tile_windows();
+
+        // Optionally warp the mouse pointer to the newly floating window
+        warp_pointer_to_window(&client->window);
     }
-    tile_windows(); // Rearrange windows
-  }
 }
 
 void exit_pwm(const Arg *arg) {

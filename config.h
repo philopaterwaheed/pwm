@@ -21,7 +21,7 @@ static std::vector<shortcut> shortcuts = {
     {MOD | SHIFT, XK_Left, move_focused_window_x, {.i = -20}},
     {MOD | SHIFT, XK_Down, move_focused_window_y, {.i = +20}},
     {MOD | SHIFT, XK_Up, move_focused_window_y, {.i = -20}},
-    {MOD | SHIFT, XK_j, swap_window, {.i = -1}},
-    {MOD | SHIFT, XK_k, swap_window, {.i = +1}},
+    {MOD | SHIFT, XK_j, swap_window, {.i = +1}},
+    {MOD | SHIFT, XK_k, swap_window, {.i = -1}},
 
 };
