@@ -52,6 +52,7 @@ void handle_enter_notify(XEvent *e);
 void handle_map_request(XEvent *e);
 void handle_configure_request(XEvent *e);
 void handle_key_press(XEvent *e);
+void warp_pointer_to_window(Window win) ;
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg *arg);
 void resize_focused_window_y(const Arg *arg);

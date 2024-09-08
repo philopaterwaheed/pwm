@@ -8,7 +8,7 @@
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
-Window focused_window = None;
+Window focused_window = None, master_window = None;
 
 std::vector<Client> clients; // the clients vector
 
@@ -99,6 +99,7 @@ void resize_focused_window_y(const Arg *arg) {
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWHeight, &changes);
+    warp_pointer_to_window(focused_window);
   }
 }
 void resize_focused_window_x(const Arg *arg) {
@@ -119,6 +120,7 @@ void resize_focused_window_x(const Arg *arg) {
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWWidth, &changes);
+    warp_pointer_to_window(focused_window);
   }
 }
 
@@ -130,6 +132,7 @@ void move_focused_window_x(const Arg *arg) {
 
     changes.x = wa.x + arg->i;
     XConfigureWindow(display, focused_window, CWX, &changes);
+    warp_pointer_to_window(focused_window);
   }
 }
 void move_focused_window_y(const Arg *arg) {
@@ -140,6 +143,7 @@ void move_focused_window_y(const Arg *arg) {
 
     changes.y = wa.y + arg->i;
     XConfigureWindow(display, focused_window, CWY, &changes);
+    warp_pointer_to_window(focused_window);
   }
 }
 void swap_window(const Arg *arg) {
@@ -148,6 +152,7 @@ void swap_window(const Arg *arg) {
   index2 = index2 >= clients.size() ? 0 : index2;
   if (index1 < clients.size() && index2 < clients.size()) {
     std::swap(clients[index1], clients[index2]);
+    warp_pointer_to_window(focused_window);
     tile_windows(); // Rearrange windows after swapping
   }
 }
@@ -160,6 +165,14 @@ int get_focused_window_index() {
     }
   }
   return -1; // Not found
+}
+
+void warp_pointer_to_window(Window win) {
+  XWindowAttributes wa;
+  XGetWindowAttributes(display, win, &wa);
+  int x = wa.x + wa.width / 2;
+  int y = wa.y + wa.height / 2;
+  XWarpPointer(display, None, win, 0, 0, 0, 0, x, y);
 }
 void lunch(const Arg *arg) {
   auto args = (char **)arg->v;
@@ -179,7 +192,6 @@ void lunch(const Arg *arg) {
     execvp(args[0], args);
     // The execvp() function replaces the current process image with a new
     // process
-    fprintf(stderr, "Failed to launch st\n");
     exit(1);
   }
 }
@@ -276,7 +288,7 @@ void tile_windows() {
       continue;
     }
 
-    if (tiled_index == 0) {
+    if (tiled_index == 0) { // make a master here
       // Master window
       XMoveResizeWindow(display, c->window, 0, 0, master_width, screen_height);
     } else {
@@ -288,6 +300,11 @@ void tile_windows() {
     }
     ++tiled_index;
   }
+  for (unsigned int i = 0; i < clients.size(); ++i) {
+    if (clients[i].floating) {
+      XRaiseWindow(display, clients[i].window);
+    }
+  }
 }
 
 void toggle_floating(const Arg *arg) {
@@ -297,7 +314,17 @@ void toggle_floating(const Arg *arg) {
   Client *client = find_client(focused_window);
   if (client) {
     client->floating = !client->floating; // Toggle floating
-    tile_windows();                       // Rearrange windows
+    if (client->floating) {
+    	  XWindowAttributes wa;
+    	  XGetWindowAttributes(display, focused_window, &wa);
+    	  client->x = wa.x;
+    	  client->y = wa.y;
+    	  client->width = wa.width;
+    	  client->height = wa.height;
+    	  XMoveResizeWindow(display, focused_window, 100, 100, 800, 600); // not for future me make rule in this 
+    	  XRaiseWindow(display, focused_window);
+    	}     	
+    tile_windows(); // Rearrange windows
   }
 }
 
