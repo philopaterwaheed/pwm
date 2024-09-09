@@ -13,8 +13,7 @@
 #include <variant>
 #include <vector>
 
-#define MOD Mod4Mask    // Usually the Windows key
-#define SHIFT ShiftMask // Usually the shift key
+
 #define CLEANMASK(mask)                                                        \
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
            Mod4Mask | Mod5Mask))
@@ -63,6 +62,7 @@ void handle_enter_notify(XEvent *e);
 void handle_map_request(XEvent *e);
 void handle_configure_request(XEvent *e);
 void handle_key_press(XEvent *e);
+void update_status(XEvent *ev) ;
 void warp_pointer_to_window(Window *win);
 void restack_windows();
 // arg functions to invoke with shortcut
