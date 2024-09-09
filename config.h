@@ -4,17 +4,27 @@
 #include <X11/Xutil.h>
 #include <vector>
 
-//constatns
+// constatns
 
-const int BORDER_WIDTH = 1; // Width of the window border in pixels
-const unsigned long BORDER_COLOR = 0xd3d3d3; // gray color for borders (hex value)
-const unsigned long FOCUSED_BORDER_COLOR = 0x000000; // black color for focused window
-const int GAP_SIZE = 1; // Size of the gap around windows in pixels
+static int BORDER_WIDTH = 1; // Width of the window border in pixels
+static unsigned long BORDER_COLOR =
+    0xd3d3d3; // gray color for borders (hex value)
+static unsigned long FOCUSED_BORDER_COLOR =
+    0x000000;            // black color for focused window
+static int GAP_SIZE = 1; // Size of the gap around windows in pixels
 
+// all about workspaces
+static const std::string workspaces_names[5] = {"_", "", "", "",
+                                                ""};
+static int NUM_WORKSPACES = 5; // Number of workspaces
+#define WORKSPACEKEYS(KEY, WORKSPACENUM)                                       \
+  {MOD, KEY, switch_workspace, {.i = WORKSPACENUM}}, {                         \
+    MOD | SHIFT, KEY, move_window_to_workspace, { .i = WORKSPACENUM }          \
+  }
 // commands
 static const char *term[] = {"st", NULL};
 static const char *s_shot[] = {"flameshot", "gui", NULL}; // for screenshots
-							  //
+                                                          //
 // shortcuts
 static std::vector<shortcut> shortcuts = {
     {MOD, XK_q, kill_focused_window, {0}},
@@ -32,5 +42,10 @@ static std::vector<shortcut> shortcuts = {
     {MOD | SHIFT, XK_Up, move_focused_window_y, {.i = -20}},
     {MOD | SHIFT, XK_j, swap_window, {.i = +1}},
     {MOD | SHIFT, XK_k, swap_window, {.i = -1}},
+    WORKSPACEKEYS(XK_1, 1),
+    WORKSPACEKEYS(XK_2, 2),
+    WORKSPACEKEYS(XK_3, 3),
+    WORKSPACEKEYS(XK_4, 4),
+    WORKSPACEKEYS(XK_5, 5),
 
 };
