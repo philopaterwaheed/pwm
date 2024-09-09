@@ -4,15 +4,18 @@
 #include <X11/X.h>
 #include <X11/Xlib.h>
 #include <cstdlib>
+#include <string>
 
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
-Window focused_window = None, master_window = None;
+Window focused_window = None, master_window = None, bar_window;
 
 short current_workspace = 0;
 std::vector<Workspace> workspaces(NUM_WORKSPACES);
 auto *clients = &workspaces[0].clients;
+
+std::string status = "pwm";
 
 // Find a client by its window id and return a pointer to it
 Client *find_client(Window w) {
@@ -23,7 +26,70 @@ Client *find_client(Window w) {
   }
   return nullptr;
 }
+void create_bar() {
+  int screen_width = DisplayWidth(display, DefaultScreen(display));
+  int screen_height = DisplayHeight(display, DefaultScreen(display));
 
+  // Create the bar window
+  bar_window = XCreateSimpleWindow(display, root, 0, 0, screen_width,
+                                   BAR_HEIGHT, 0, 0, 0x000000);
+  /* XSelectInput(display, bar_window, ExposureMask | KeyPressMask); */
+  XMapWindow(display, bar_window);
+}
+void update_bar() {
+  // Get screen dimensions
+  int screen_width = DisplayWidth(display, DefaultScreen(display));
+  int screen_height = DisplayHeight(display, DefaultScreen(display));
+
+  // Clear the window for redrawing
+  XClearWindow(display, bar_window);
+
+  // Create a graphics context (GC)
+  GC gc = XCreateGC(display, bar_window, 0, nullptr);
+
+  // Set foreground color for text (white in this case)
+  XSetForeground(display, gc, WhitePixel(display, DefaultScreen(display)));
+
+  // Set the background color for text (optional, in case you need a different
+  // background)
+  XSetBackground(display, gc, BlackPixel(display, DefaultScreen(display)));
+
+  // Load font and set it for the GC
+  XFontStruct *font_info =
+      XLoadQueryFont(display, "fixed"); // Use the default "fixed" font
+  if (!font_info) {
+    // If the specified font is not available, handle the error
+    fprintf(stderr, "Unable to load font\n");
+    return;
+  }
+  XSetFont(display, gc, font_info->fid);
+
+  // Construct the workspace status string
+  std::string workspace_status = "";
+  for (int i = 0; i < NUM_WORKSPACES; ++i) {
+    if (i == current_workspace) {
+      workspace_status += "[*] "; // Highlight the active workspace
+    } else {
+      workspace_status += "[ ] "; // Inactive workspace
+    }
+  }
+
+  // Draw workspace status on the left side of the bar
+  XDrawString(display, bar_window, gc, 10, 15, workspace_status.c_str(),
+              workspace_status.size());
+
+  // Draw status text (e.g., time, system info) on the right side of the bar
+  int status_text_len = (status).size();
+  int status_text_width =
+      XTextWidth(font_info, status.c_str(),
+                 status_text_len); // Get text width for proper alignment
+  XDrawString(display, bar_window, gc, screen_width - 10 - status_text_width,
+              15, status.c_str(), status_text_len);
+
+  // Clean up: free the graphics context and font info
+  XFreeGC(display, gc);
+  XFreeFont(display, font_info);
+}
 void handle_focus_in(XEvent *e) {
   XFocusChangeEvent *ev = &e->xfocus;
   if (focused_window != None)
@@ -257,11 +323,38 @@ void run() {
       handle_key_press(&ev);
       break;
     case PropertyNotify:
+      update_status(&ev);
+      update_bar();
       break;
     }
   }
 }
 
+void update_status(XEvent *ev) {
+
+  if (ev->xproperty.atom == XInternAtom(display, "WM_NAME", False)) {
+    /* // Update status text from xsetroot */
+    XTextProperty name;
+    char **list = nullptr;
+    int count = 0;
+
+    if (XGetWMName(display, root, &name)) {
+
+      if (XmbTextPropertyToTextList(display, &name, &list, &count) >= Success &&
+          count > 0 && list != nullptr) {
+        // Only take the first string (most window titles are single string)
+        status = list[0];
+
+        // Free the list after use
+        XFreeStringList(list);
+      } else {
+        // If conversion failed or there was no text, return empty string
+        status = "pwm";
+      }
+    }
+  }
+  update_bar();
+}
 void switch_workspace(const Arg *arg) {
   int new_workspace = arg->i - 1;
   if (new_workspace == current_workspace || new_workspace > NUM_WORKSPACES ||
@@ -283,6 +376,7 @@ void switch_workspace(const Arg *arg) {
   clients = &workspaces[current_workspace].clients;
   // Re-tile the windows in the new workspace
   tile_windows();
+  update_bar();
 }
 void move_window_to_workspace(const Arg *arg) {
   int target_workspace = arg->i - 1;
@@ -337,6 +431,8 @@ int main() {
   // Capture key presses for the mod key (e.g., Mod4Mask) with any key
 
   grab_keys();
+  create_bar();
+  update_bar();
   run();
 
   XCloseDisplay(display);

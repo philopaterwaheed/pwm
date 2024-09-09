@@ -5,6 +5,9 @@
 #include <vector>
 
 // constatns
+#define MOD Mod4Mask    // Usually the Windows key
+#define SHIFT ShiftMask // Usually the shift key
+#define BAR_HEIGHT 30   // Height of the bar in pixels
 
 static int BORDER_WIDTH = 1; // Width of the window border in pixels
 static unsigned long BORDER_COLOR =
