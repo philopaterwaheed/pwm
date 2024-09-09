@@ -10,11 +10,13 @@ Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
 Window focused_window = None, master_window = None;
 
-std::vector<Client> clients; // the clients vector
+short current_workspace = 0;
+std::vector<Workspace> workspaces(NUM_WORKSPACES);
+auto *clients = &workspaces[0].clients;
 
 // Find a client by its window id and return a pointer to it
 Client *find_client(Window w) {
-  for (auto &client : clients) {
+  for (auto &client : *clients) {
     if (client.window == w) {
       return &client;
     }
@@ -24,21 +26,25 @@ Client *find_client(Window w) {
 
 void handle_focus_in(XEvent *e) {
   XFocusChangeEvent *ev = &e->xfocus;
-  XSetWindowBorder(display, ev->window, FOCUSED_BORDER_COLOR);
+  if (focused_window != None)
+    XSetWindowBorder(display, focused_window, FOCUSED_BORDER_COLOR);
 }
 void handle_focus_out(XEvent *e) {
   XFocusChangeEvent *ev = &e->xfocus;
-  XSetWindowBorder(display, ev->window, BORDER_COLOR);
+  if (focused_window ==
+      None) // that happens when we are killing leaading to program crash
+    return;
+  else
+    XSetWindowBorder(display, ev->window, BORDER_COLOR);
 }
-
 void kill_focused_window(const Arg *arg) {
   (void)arg;
   if (focused_window != None) {
-    clients.erase(std::remove_if(clients.begin(), clients.end(),
-                                 [](const Client &c) {
-                                   return c.window == focused_window;
-                                 }),
-                  clients.end());
+    clients->erase(std::remove_if(clients->begin(), clients->end(),
+                                  [](const Client &c) {
+                                    return c.window == focused_window;
+                                  }),
+                   clients->end());
     XKillClient(display, focused_window);
     focused_window = None; // Reset focused window
                            //
@@ -52,7 +58,6 @@ void handle_enter_notify(XEvent *e) {
   if (ev->mode == NotifyNormal && ev->detail != NotifyInferior) {
     XSetInputFocus(display, ev->window, RevertToPointerRoot, CurrentTime);
     focused_window = ev->window; // Set the focused window on mouse enter
-    XSetWindowBorder(display, ev->window, FOCUSED_BORDER_COLOR);
   }
 }
 void handle_map_request(XEvent *e) {
@@ -63,15 +68,16 @@ void handle_map_request(XEvent *e) {
   if (wa.override_redirect)
     return;
 
-XSelectInput(display, ev->window, StructureNotifyMask | EnterWindowMask|FocusChangeMask);
+  XSelectInput(display, ev->window,
+               StructureNotifyMask | EnterWindowMask | FocusChangeMask);
   XMapWindow(display, ev->window);
   // Set border width
   XSetWindowBorderWidth(display, ev->window, BORDER_WIDTH);
   // Set initial border color (unfocused)
   XSetWindowBorder(display, ev->window, BORDER_COLOR);
-  clients.push_back({ev->window, wa.x, wa.y,
-                     static_cast<unsigned int>(wa.width),
-                     static_cast<unsigned int>(wa.height)});
+  clients->push_back({ev->window, wa.x, wa.y,
+                      static_cast<unsigned int>(wa.width),
+                      static_cast<unsigned int>(wa.height)});
   tile_windows();
 }
 
@@ -165,20 +171,20 @@ void move_focused_window_y(const Arg *arg) {
 }
 void swap_window(const Arg *arg) {
   int index1 = get_focused_window_index(), index2 = index1 + arg->i;
-  index2 = index2 < 0 ? clients.size() - 1 : index2;
-  index2 = index2 >= clients.size() ? 0 : index2;
-  if (index1 < clients.size() && index2 < clients.size()) {
+  index2 = index2 < 0 ? clients->size() - 1 : index2;
+  index2 = index2 >= clients->size() ? 0 : index2;
+  if (index1 < clients->size() && index2 < clients->size()) {
     std::swap(clients[index1], clients[index2]);
     /* warp_pointer_to_window(focused_window); */
     tile_windows(); // Rearrange windows after swapping
-    warp_pointer_to_window(&clients[index2].window);
+    warp_pointer_to_window(&(*clients)[index2].window);
   }
 }
 
 // Get the index of the focused window
 int get_focused_window_index() {
-  for (unsigned int i = 0; i < clients.size(); ++i) {
-    if (clients[i].window == focused_window) {
+  for (unsigned int i = 0; i < clients->size(); ++i) {
+    if ((*clients)[i].window == focused_window) {
       return i;
     }
   }
@@ -256,6 +262,54 @@ void run() {
   }
 }
 
+void switch_workspace(const Arg *arg) {
+  int new_workspace = arg->i - 1;
+  if (new_workspace == current_workspace || new_workspace > NUM_WORKSPACES ||
+      new_workspace < 0)
+    return;
+
+  // Unmap windows from the current workspace
+  for (auto &client : workspaces[current_workspace].clients) {
+    XUnmapWindow(display, client.window);
+  }
+
+  current_workspace = new_workspace;
+
+  // Map windows from the new workspace
+  for (auto &client : workspaces[current_workspace].clients) {
+    XMapWindow(display, client.window);
+  }
+
+  clients = &workspaces[current_workspace].clients;
+  // Re-tile the windows in the new workspace
+  tile_windows();
+}
+void move_window_to_workspace(const Arg *arg) {
+  int target_workspace = arg->i - 1;
+  if (focused_window == None || target_workspace == current_workspace ||
+      target_workspace < 0 || target_workspace > NUM_WORKSPACES) {
+    return; // No window to move or target workspace is the same as current
+  }
+
+  // Remove window from the current workspace
+  auto &current_clients = workspaces[current_workspace].clients;
+  auto it = std::remove_if(
+      current_clients.begin(), current_clients.end(),
+      [=](Client &client) { return client.window == focused_window; });
+  if (it != current_clients.end()) {
+    current_clients.erase(it, current_clients.end());
+  }
+
+  // Add window to the target workspace
+  XWindowAttributes wa;
+  XGetWindowAttributes(display, focused_window, &wa);
+
+  workspaces[target_workspace].clients.push_back(
+      {focused_window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
+       static_cast<unsigned int>(wa.height), false});
+  XUnmapWindow(display, focused_window);
+  tile_windows();
+}
 void grab_keys() {
   // it only lets the window manager to listen to the key presses we specify
   for (auto shortcut : shortcuts) {
@@ -292,7 +346,7 @@ void tile_windows() {
   unsigned int num_tiled_clients = 0;
 
   // First, count the number of non-floating (tiled) clients
-  for (auto &client : clients) {
+  for (auto &client : *clients) {
     if (!client.floating) {
       ++num_tiled_clients;
     }
@@ -309,8 +363,8 @@ void tile_windows() {
   int master_width = screen_width * 0.6;
 
   unsigned int tiled_index = 0; // To track the position of tiled clients
-  for (unsigned int i = 0; i < clients.size(); ++i) {
-    Client *c = &clients[i];
+  for (unsigned int i = 0; i < clients->size(); ++i) {
+    Client *c = &(*clients)[i];
     if (c->floating) {
       // Skip floating windows and store their indices for later raising
       continue;

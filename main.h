@@ -19,12 +19,13 @@
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
            Mod4Mask | Mod5Mask))
 
+
 static unsigned int numlockmask = 0;
 
 struct Client {
   Window window; // the window id
   int x, y;
-  unsigned int width, height, index;
+  unsigned int width, height;
   bool floating = false; // Indicates whether the window is floating or tiled
 };
 
@@ -44,16 +45,25 @@ struct shortcut {
   Arg arg;
 };
 
+struct Layout {
+  std ::string name;
+  void (*arrange)();
+};
+struct Workspace {
+  std::vector<Client> clients = {};
+  Layout layout;
+};
+
 Client *find_client(Window w);
 int get_focused_window_index();
 void tile_windows();
 void handle_focus_in(XEvent *e);
-void handle_focus_out(XEvent *e) ;
+void handle_focus_out(XEvent *e);
 void handle_enter_notify(XEvent *e);
 void handle_map_request(XEvent *e);
 void handle_configure_request(XEvent *e);
 void handle_key_press(XEvent *e);
-void warp_pointer_to_window(Window* win) ;
+void warp_pointer_to_window(Window *win);
 void restack_windows();
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg *arg);
@@ -64,4 +74,6 @@ void kill_focused_window(const Arg *arg);
 void exit_pwm(const Arg *arg);
 void lunch(const Arg *arg);
 void toggle_floating(const Arg *arg);
-void swap_window(const Arg *arg) ;
+void swap_window(const Arg *arg);
+void switch_workspace(const Arg *arg);
+void move_window_to_workspace(const Arg *arg);
