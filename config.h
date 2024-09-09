@@ -4,9 +4,18 @@
 #include <X11/Xutil.h>
 #include <vector>
 
+//constatns
+
+const int BORDER_WIDTH = 1; // Width of the window border in pixels
+const unsigned long BORDER_COLOR = 0xd3d3d3; // gray color for borders (hex value)
+const unsigned long FOCUSED_BORDER_COLOR = 0x000000; // black color for focused window
+const int GAP_SIZE = 1; // Size of the gap around windows in pixels
+
 // commands
 static const char *term[] = {"st", NULL};
 static const char *s_shot[] = {"flameshot", "gui", NULL}; // for screenshots
+							  //
+// shortcuts
 static std::vector<shortcut> shortcuts = {
     {MOD, XK_q, kill_focused_window, {0}},
     {MOD, XK_t, lunch, {.v = term}},
