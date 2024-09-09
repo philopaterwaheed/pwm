@@ -20,7 +20,6 @@
            Mod4Mask | Mod5Mask))
 
 static unsigned int numlockmask = 0;
-const int GAP_SIZE = 2; // Size of the gap around windows in pixels
 
 struct Client {
   Window window; // the window id
@@ -49,6 +48,7 @@ Client *find_client(Window w);
 int get_focused_window_index();
 void tile_windows();
 void handle_focus_in(XEvent *e);
+void handle_focus_out(XEvent *e) ;
 void handle_enter_notify(XEvent *e);
 void handle_map_request(XEvent *e);
 void handle_configure_request(XEvent *e);
