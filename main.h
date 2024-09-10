@@ -22,7 +22,6 @@
            Mod4Mask | Mod5Mask))
 
 static unsigned int numlockmask = 0;
-static int bar_hight_place_holder = 0;
 
 struct Client {
   Window window; // the window id
@@ -74,6 +73,7 @@ void update_bar() ;
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
                                  int x, int y, int screen) ;
+void one_window() ;
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg *arg);
 void resize_focused_window_y(const Arg *arg);
@@ -88,7 +88,7 @@ void switch_workspace(const Arg *arg);
 void move_window_to_workspace(const Arg *arg);
 void toggle_fullscreen(const Arg *arg) ;
 void set_master(const Arg *arg);
-void one_window() ;
+void toggle_bar(const Arg *arg) ;
 // ///
 // event handlers
 void handle_focus_in(XEvent *e);

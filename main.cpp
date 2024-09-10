@@ -1,6 +1,8 @@
 
 #include "main.h"
 #include "config.h"
+#include <X11/Xlib.h>
+#include <utility>
 
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
@@ -10,6 +12,7 @@ XftFont *xft_font;
 XftDraw *xft_draw;
 XftColor xft_color;
 
+int bar_hight_place_holder = 0;
 short current_workspace = 0;
 std::vector<Workspace> workspaces(NUM_WORKSPACES);
 /* std::vector<Button> buttons(NUM_WORKSPACES); */
@@ -493,6 +496,24 @@ void toggle_floating(const Arg *arg) {
     warp_pointer_to_window(&client->window);
   }
 }
+void toggle_bar(const Arg *arg) {
+  SHOW_BAR = !SHOW_BAR;
+  std::swap(bar_hight_place_holder, BAR_HEIGHT);
+  if (SHOW_BAR) {
+    XMapWindow(display, bar_window);
+    XSelectInput(display, root,
+                 SubstructureRedirectMask | SubstructureNotifyMask |
+                     KeyPressMask | ExposureMask |
+                     PropertyChangeMask); // resubscribe
+    update_bar();
+  } else {
+    XUnmapWindow(display, bar_window);
+    XSelectInput(display, root,
+                 SubstructureRedirectMask | SubstructureNotifyMask |
+                     KeyPressMask | ExposureMask); // unsubscibe for more speed
+  }
+  tile_windows();
+}
 void toggle_fullscreen(const Arg *arg) {
   auto client = find_client(focused_window);
   if (!client)
@@ -536,10 +557,11 @@ void one_window() {
     int screen_width = DisplayWidth(display, DefaultScreen(display));
     int screen_height = DisplayHeight(display, DefaultScreen(display));
 
-    int height = screen_height - BAR_HEIGHT ; 
+    int height = screen_height - BAR_HEIGHT;
 
     // Move and resize the window to fit within the calculated region
-    XMoveResizeWindow(display, clients->front().window, 0, BAR_HEIGHT, screen_width, height);
+    XMoveResizeWindow(display, clients->front().window, 0, BAR_HEIGHT,
+                      screen_width, height);
   }
 }
 
