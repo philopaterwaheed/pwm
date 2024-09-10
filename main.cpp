@@ -2,20 +2,29 @@
 #include "main.h"
 #include "config.h"
 #include <X11/X.h>
+#include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
 #include <cstdlib>
+#include <fontconfig/fontconfig.h>
+#include <iostream>
 #include <string>
+#include <unordered_map>
 
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
 Window focused_window = None, master_window = None, bar_window;
+XftFont *xft_font;
+XftDraw *xft_draw;
+XftColor xft_color;
+std::unordered_map<FcChar32, XftFont *> font_cache;
 
 short current_workspace = 0;
 std::vector<Workspace> workspaces(NUM_WORKSPACES);
 auto *clients = &workspaces[0].clients;
 
-std::string status = "pwm";
+std::string status = "pwm by philo";
+std::vector<XftFont *> fallbackFonts;
 
 // Find a client by its window id and return a pointer to it
 Client *find_client(Window w) {
@@ -26,6 +35,92 @@ Client *find_client(Window w) {
   }
   return nullptr;
 }
+
+// Cache to store fonts for each Unicode character or character range
+
+// Function to select and cache the appropriate font for a character
+XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) {
+  // Check if the font for this character is already cached
+  if (font_cache.find(ucs4) != font_cache.end()) {
+    return font_cache[ucs4];
+  }
+
+  // If not cached, use Fontconfig to find the appropriate font
+  FcPattern *pattern = FcPatternCreate();
+  FcCharSet *charset = FcCharSetCreate();
+  FcCharSetAddChar(charset, ucs4);
+  FcPatternAddCharSet(pattern, FC_CHARSET, charset);
+  FcPatternAddBool(pattern, FC_SCALABLE, FcTrue);
+
+  FcResult result;
+  FcPattern *match = FcFontMatch(nullptr, pattern, &result);
+  XftFont *font = nullptr;
+
+  if (match) {
+    char *font_name = nullptr;
+    FcPatternGetString(match, FC_FAMILY, 0, (FcChar8 **)&font_name);
+    if (font_name) {
+      font = XftFontOpenName(display, screen, font_name);
+    }
+    FcPatternDestroy(match);
+  }
+
+  FcPatternDestroy(pattern);
+  FcCharSetDestroy(charset);
+
+  // Fallback to default font if no match was found
+  if (!font) {
+    font = XftFontOpenName(display, screen, "fixed");
+  }
+
+  // Cache the font for this character
+  font_cache[ucs4] = font;
+
+  return font;
+}
+
+// Function to render text, choosing appropriate font dynamically with caching
+void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
+                                 XftColor *color, const std::string &text,
+                                 int x, int y, int screen) {
+  int x_offset = x;
+
+  for (size_t i = 0; i < text.size();) {
+    // Decode the UTF-8 character
+    FcChar32 ucs4;
+    int bytes = FcUtf8ToUcs4((FcChar8 *)(&text[i]), &ucs4, text.size() - i);
+    if (bytes <= 0)
+      break;
+
+    // Select and cache the appropriate font for this character
+    XftFont *font = select_font_for_char(display, ucs4, screen);
+    if (!font) {
+      std::cerr << "Failed to load font for character: " << ucs4 << std::endl;
+      break;
+    }
+
+    // Render the character using the selected (or cached) font
+    XftDrawStringUtf8(draw, color, font, x_offset, y, (FcChar8 *)&text[i],
+                      bytes);
+    XGlyphInfo extents;
+    XftTextExtentsUtf8(display, font, (FcChar8 *)&text[i], bytes, &extents);
+    x_offset += extents.xOff;
+
+    // Move to the next character
+    i += bytes;
+  }
+}
+int get_utf8_string_width(Display* display, XftFont* font, const std::string& text) {
+    // Convert std::string to XftChar8 array
+    
+    XGlyphInfo extents;
+    XftChar8* utf8_string = reinterpret_cast<XftChar8*>(const_cast<char*>(text.c_str()));
+    
+    // Measure the width of the UTF-8 string
+    XftTextExtentsUtf8(display, font, utf8_string, text.length(), &extents);
+
+    return extents.width;
+}
 void create_bar() {
   int screen_width = DisplayWidth(display, DefaultScreen(display));
   int screen_height = DisplayHeight(display, DefaultScreen(display));
@@ -33,62 +128,46 @@ void create_bar() {
   // Create the bar window
   bar_window = XCreateSimpleWindow(display, root, 0, 0, screen_width,
                                    BAR_HEIGHT, 0, 0, 0x000000);
-  /* XSelectInput(display, bar_window, ExposureMask | KeyPressMask); */
+  XSelectInput(display, bar_window, ExposureMask | KeyPressMask | ButtonPressMask);
   XMapWindow(display, bar_window);
+  // Load the font using Xft
+  xft_font = XftFontOpenName(display, DefaultScreen(display), BAR_FONT.c_str());
+
+  // Create a drawable for the bar
+  xft_draw = XftDrawCreate(display, bar_window,
+                           DefaultVisual(display, DefaultScreen(display)),
+                           DefaultColormap(display, DefaultScreen(display)));
+
+  // Set the color for drawing text (white in this case)
+  XRenderColor render_color = {0xffff, 0xffff, 0xffff, 0xffff}; // White color
+  XftColorAllocValue(display, DefaultVisual(display, DefaultScreen(display)),
+                     DefaultColormap(display, DefaultScreen(display)),
+                     &render_color, &xft_color);
 }
 void update_bar() {
-  // Get screen dimensions
   int screen_width = DisplayWidth(display, DefaultScreen(display));
-  int screen_height = DisplayHeight(display, DefaultScreen(display));
 
-  // Clear the window for redrawing
   XClearWindow(display, bar_window);
 
-  // Create a graphics context (GC)
-  GC gc = XCreateGC(display, bar_window, 0, nullptr);
-
-  // Set foreground color for text (white in this case)
-  XSetForeground(display, gc, WhitePixel(display, DefaultScreen(display)));
-
-  // Set the background color for text (optional, in case you need a different
-  // background)
-  XSetBackground(display, gc, BlackPixel(display, DefaultScreen(display)));
-
-  // Load font and set it for the GC
-  XFontStruct *font_info =
-      XLoadQueryFont(display, "fixed"); // Use the default "fixed" font
-  if (!font_info) {
-    // If the specified font is not available, handle the error
-    fprintf(stderr, "Unable to load font\n");
-    return;
-  }
-  XSetFont(display, gc, font_info->fid);
-
-  // Construct the workspace status string
+  // Workspace names
   std::string workspace_status = "";
   for (int i = 0; i < NUM_WORKSPACES; ++i) {
     if (i == current_workspace) {
-      workspace_status += "[*] "; // Highlight the active workspace
+      workspace_status += "[*] ";
     } else {
-      workspace_status += "[ ] "; // Inactive workspace
+      workspace_status += "[ ] ";
     }
   }
 
-  // Draw workspace status on the left side of the bar
-  XDrawString(display, bar_window, gc, 10, 15, workspace_status.c_str(),
-              workspace_status.size());
+  // Draw workspace names using Xft
+  draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color,
+                              workspace_status, 10, 15,
+                              XDefaultScreen(display));
 
-  // Draw status text (e.g., time, system info) on the right side of the bar
-  int status_text_len = (status).size();
-  int status_text_width =
-      XTextWidth(font_info, status.c_str(),
-                 status_text_len); // Get text width for proper alignment
-  XDrawString(display, bar_window, gc, screen_width - 10 - status_text_width,
-              15, status.c_str(), status_text_len);
-
-  // Clean up: free the graphics context and font info
-  XFreeGC(display, gc);
-  XFreeFont(display, font_info);
+  /* XftDrawStringUtf8(xft_draw, &xft_color, xft_font,  500 + status.size() ,
+   * 15, reinterpret_cast<const FcChar8*>(status.c_str()), status.size()); */
+  draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color, status,
+                              get_utf8_string_width(display, xft_font, status), 15, XDefaultScreen(display));
 }
 void handle_focus_in(XEvent *e) {
   XFocusChangeEvent *ev = &e->xfocus;
@@ -353,7 +432,6 @@ void update_status(XEvent *ev) {
       }
     }
   }
-  update_bar();
 }
 void switch_workspace(const Arg *arg) {
   int new_workspace = arg->i - 1;
@@ -411,6 +489,12 @@ void grab_keys() {
              root, True, GrabModeAsync, GrabModeAsync);
   }
 }
+void cleanup() {
+  XftFontClose(display, xft_font);
+  XftDrawDestroy(xft_draw);
+  XCloseDisplay(display);
+}
+
 int main() {
   display = XOpenDisplay(nullptr);
   if (!display) {
@@ -435,6 +519,7 @@ int main() {
   update_bar();
   run();
 
+  cleanup();
   XCloseDisplay(display);
   return 0;
 }
@@ -442,7 +527,7 @@ void tile_windows() {
   unsigned int num_tiled_clients = 0;
 
   // First, count the number of non-floating (tiled) clients
-  for (auto &client : *clients) {
+  for (const auto &client : *clients) {
     if (!client.floating) {
       ++num_tiled_clients;
     }
@@ -469,23 +554,16 @@ void tile_windows() {
     if (tiled_index == 0) { // First window is the master
       // Master window positioning with border
       XMoveResizeWindow(
-          display, c->window, GAP_SIZE, GAP_SIZE, // Position with gaps
-          master_width -
-              2 * (GAP_SIZE +
-                   BORDER_WIDTH), // Width adjusted for border and gaps
-          screen_height -
-              2 * (GAP_SIZE +
-                   BORDER_WIDTH) // Height adjusted for border and gaps
+          display, c->window, GAP_SIZE, BAR_HEIGHT + GAP_SIZE, // Position with gaps and bar height
+          master_width - 2 * (GAP_SIZE + BORDER_WIDTH), // Width adjusted for border and gaps
+          screen_height - BAR_HEIGHT - 2 * (GAP_SIZE + BORDER_WIDTH) // Height adjusted for bar, border, and gaps
       );
     } else {
       // Stack windows positioning with border
-      int stack_width =
-          screen_width - master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
-      int stack_height = (screen_height / (num_tiled_clients - 1)) - GAP_SIZE -
-                         2 * BORDER_WIDTH;
+      int stack_width = screen_width - master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
+      int stack_height = (screen_height - BAR_HEIGHT - GAP_SIZE - 2 * BORDER_WIDTH) / (num_tiled_clients - 1);
       int x = master_width + GAP_SIZE;
-      int y = (tiled_index - 1) * (stack_height + GAP_SIZE + 2 * BORDER_WIDTH) +
-              GAP_SIZE;
+      int y = BAR_HEIGHT + GAP_SIZE + (tiled_index - 1) * (stack_height + GAP_SIZE);
 
       XMoveResizeWindow(display, c->window, x, y, // Position with gaps
                         stack_width,              // Width adjusted for border
@@ -541,6 +619,7 @@ void toggle_floating(const Arg *arg) {
 }
 
 void exit_pwm(const Arg *arg) {
-  free(display);
+  XCloseDisplay(display);
   exit(0);
+  void cleanup();
 }
