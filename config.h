@@ -9,12 +9,13 @@
 #define SHIFT ShiftMask // Usually the shift key
 #define BAR_HEIGHT 30   // Height of the bar in pixels
 
+static std::string BAR_FONT = "NotoMono Nerd Font:5";
 static int BORDER_WIDTH = 1; // Width of the window border in pixels
 static unsigned long BORDER_COLOR =
     0xd3d3d3; // gray color for borders (hex value)
 static unsigned long FOCUSED_BORDER_COLOR =
     0x000000;            // black color for focused window
-static int GAP_SIZE = 1; // Size of the gap around windows in pixels
+static int GAP_SIZE = 5; // Size of the gap around windows in pixels
 
 // all about workspaces
 static const std::string workspaces_names[5] = {"_", "", "", "",
