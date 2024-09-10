@@ -1,14 +1,6 @@
 
 #include "main.h"
 #include "config.h"
-#include <X11/X.h>
-#include <X11/Xft/Xft.h>
-#include <X11/Xlib.h>
-#include <cstdlib>
-#include <fontconfig/fontconfig.h>
-#include <iostream>
-#include <string>
-#include <unordered_map>
 
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
@@ -17,7 +9,6 @@ Window focused_window = None, master_window = None, bar_window;
 XftFont *xft_font;
 XftDraw *xft_draw;
 XftColor xft_color;
-std::unordered_map<FcChar32, XftFont *> font_cache;
 
 short current_workspace = 0;
 std::vector<Workspace> workspaces(NUM_WORKSPACES);
@@ -37,93 +28,6 @@ Client *find_client(Window w) {
   return nullptr;
 }
 
-// Cache to store fonts for each Unicode character or character range
-
-// Function to select and cache the appropriate font for a character
-XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) {
-  // Check if the font for this character is already cached
-  if (font_cache.find(ucs4) != font_cache.end()) {
-    return font_cache[ucs4];
-  }
-
-  // If not cached, use Fontconfig to find the appropriate font
-  FcPattern *pattern = FcPatternCreate();
-  FcCharSet *charset = FcCharSetCreate();
-  FcCharSetAddChar(charset, ucs4);
-  FcPatternAddCharSet(pattern, FC_CHARSET, charset);
-  FcPatternAddBool(pattern, FC_SCALABLE, FcTrue);
-
-  FcResult result;
-  FcPattern *match = FcFontMatch(nullptr, pattern, &result);
-  XftFont *font = nullptr;
-
-  if (match) {
-    char *font_name = nullptr;
-    FcPatternGetString(match, FC_FAMILY, 0, (FcChar8 **)&font_name);
-    if (font_name) {
-      font = XftFontOpenName(display, screen, font_name);
-    }
-    FcPatternDestroy(match);
-  }
-
-  FcPatternDestroy(pattern);
-  FcCharSetDestroy(charset);
-
-  // Fallback to default font if no match was found
-  if (!font) {
-    font = XftFontOpenName(display, screen, "fixed");
-  }
-
-  // Cache the font for this character
-  font_cache[ucs4] = font;
-
-  return font;
-}
-
-// Function to render text, choosing appropriate font dynamically with caching
-void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
-                                 XftColor *color, const std::string &text,
-                                 int x, int y, int screen) {
-  int x_offset = x;
-
-  for (size_t i = 0; i < text.size();) {
-    // Decode the UTF-8 character
-    FcChar32 ucs4;
-    int bytes = FcUtf8ToUcs4((FcChar8 *)(&text[i]), &ucs4, text.size() - i);
-    if (bytes <= 0)
-      break;
-
-    // Select and cache the appropriate font for this character
-    XftFont *font = select_font_for_char(display, ucs4, screen);
-    if (!font) {
-      std::cerr << "Failed to load font for character: " << ucs4 << std::endl;
-      break;
-    }
-
-    // Render the character using the selected (or cached) font
-    XftDrawStringUtf8(draw, color, font, x_offset, y, (FcChar8 *)&text[i],
-                      bytes);
-    XGlyphInfo extents;
-    XftTextExtentsUtf8(display, font, (FcChar8 *)&text[i], bytes, &extents);
-    x_offset += extents.xOff;
-
-    // Move to the next character
-    i += bytes;
-  }
-}
-int get_utf8_string_width(Display *display, XftFont *font,
-                          const std::string &text) {
-  // Convert std::string to XftChar8 array
-
-  XGlyphInfo extents;
-  XftChar8 *utf8_string =
-      reinterpret_cast<XftChar8 *>(const_cast<char *>(text.c_str()));
-
-  // Measure the width of the UTF-8 string
-  XftTextExtentsUtf8(display, font, utf8_string, text.length(), &extents);
-
-  return extents.width;
-}
 void create_bar() {
   int screen_width = DisplayWidth(display, DefaultScreen(display));
   int screen_height = DisplayHeight(display, DefaultScreen(display));
@@ -174,78 +78,7 @@ void update_bar() {
                               get_utf8_string_width(display, xft_font, status),
                               15, XDefaultScreen(display));
 }
-void handle_focus_in(XEvent *e) {
-  XFocusChangeEvent *ev = &e->xfocus;
-  if (focused_window != None)
-    XSetWindowBorder(display, focused_window, FOCUSED_BORDER_COLOR);
-}
-void handle_focus_out(XEvent *e) {
-  XFocusChangeEvent *ev = &e->xfocus;
-  if (focused_window ==
-      None) // that happens when we are killing leaading to program crash
-    return;
-  else
-    XSetWindowBorder(display, ev->window, BORDER_COLOR);
-}
-void kill_focused_window(const Arg *arg) {
-  (void)arg;
-  if (focused_window != None) {
-    clients->erase(std::remove_if(clients->begin(), clients->end(),
-                                  [](const Client &c) {
-                                    return c.window == focused_window;
-                                  }),
-                   clients->end());
-    XKillClient(display, focused_window);
-    focused_window = None; // Reset focused window
-                           //
-    tile_windows();
-  }
-}
 
-// handle the mouse enter event
-void handle_enter_notify(XEvent *e) {
-  XEnterWindowEvent *ev = &e->xcrossing;
-  if (ev->mode == NotifyNormal && ev->detail != NotifyInferior) {
-    XSetInputFocus(display, ev->window, RevertToPointerRoot, CurrentTime);
-    focused_window = ev->window; // Set the focused window on mouse enter
-  }
-}
-void handle_map_request(XEvent *e) {
-  XMapRequestEvent *ev = &e->xmaprequest;
-  XWindowAttributes wa;
-  XGetWindowAttributes(display, ev->window, &wa);
-
-  if (wa.override_redirect)
-    return;
-
-  XSelectInput(display, ev->window,
-               StructureNotifyMask | EnterWindowMask | FocusChangeMask);
-  XMapWindow(display, ev->window);
-  // Set border width
-  XSetWindowBorderWidth(display, ev->window, BORDER_WIDTH);
-  // Set initial border color (unfocused)
-  XSetWindowBorder(display, ev->window, BORDER_COLOR);
-  clients->push_back({ev->window, wa.x, wa.y,
-                      static_cast<unsigned int>(wa.width),
-                      static_cast<unsigned int>(wa.height)});
-  tile_windows();
-}
-
-void handle_configure_request(XEvent *e) {
-  // this event is sent when a window wants to change its size/position
-  XConfigureRequestEvent *ev = &e->xconfigurerequest;
-
-  XWindowChanges changes;
-  changes.x = ev->x;
-  changes.y = ev->y;
-  changes.width = ev->width;
-  changes.height = ev->height;
-  changes.border_width = ev->border_width;
-  changes.sibling = ev->above;
-  changes.stack_mode = ev->detail;
-
-  XConfigureWindow(display, ev->window, ev->value_mask, &changes);
-}
 
 void resize_focused_window_y(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
@@ -371,16 +204,6 @@ void lunch(const Arg *arg) {
   }
 }
 
-void handle_key_press(XEvent *e) {
-  XKeyEvent *ev = &e->xkey;
-  for (auto shortcut : shortcuts) {
-    // the state is a bit mask and is true only when the key is mod
-    if (ev->keycode == XKeysymToKeycode(display, shortcut.key) &&
-        (CLEANMASK(ev->state) == CLEANMASK(shortcut.mask)) && shortcut.func)
-      shortcut.func(&(shortcut.arg));
-  }
-  restack_windows();
-}
 
 void run() {
   XEvent ev;
@@ -414,6 +237,20 @@ void run() {
       handle_button_press_event(&ev);
       break;
     }
+  }
+}
+void kill_focused_window(const Arg *arg) {
+  (void)arg;
+  if (focused_window != None) {
+    clients->erase(std::remove_if(clients->begin(), clients->end(),
+                                  [](const Client &c) {
+                                    return c.window == focused_window;
+                                  }),
+                   clients->end());
+    XKillClient(display, focused_window);
+    focused_window = None; // Reset focused window
+                           //
+    tile_windows();
   }
 }
 
@@ -637,6 +474,6 @@ void toggle_floating(const Arg *arg) {
 
 void exit_pwm(const Arg *arg) {
   XCloseDisplay(display);
+  cleanup();
   exit(0);
-  void cleanup();
 }
