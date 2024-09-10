@@ -242,8 +242,7 @@ void move_window_to_workspace(const Arg *arg) {
     XGetWindowAttributes(display, focused_window, &wa);
 
     (*workspaces)[target_workspace].clients.push_back(
-        {focused_window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
-         static_cast<unsigned int>(wa.height), false});
+        {focused_window, wa.x, wa.y, (wa.width), (wa.height), false});
     XUnmapWindow(display, focused_window);
     if (focused_window == current_workspace->master) {
       current_workspace->master = None;
@@ -265,10 +264,10 @@ void toggle_floating(const Arg *arg) {
     // furcing sticky windows to be floating
     //  Toggle the floating status of the focused window
     client->floating = !client->floating;
-    if (client->window == current_workspace->master) {
-      current_workspace->master = None;
-    }
     if (client->floating) { // if we are no resizing the window
+      if (client->window == current_workspace->master) {
+        current_workspace->master = None;
+      }
       // center the window
       if (arg->i != 21) {
         client->x = current_monitor->x + (current_monitor->width) / 4;
@@ -439,7 +438,7 @@ void focus_next_monitor(const Arg *arg) {
     return;
 
   // Move to the next monitor
-  unsigned int focused_monitor_index = find_monitor_index(current_monitor);
+  unsigned int focused_monitor_index = current_monitor->index;
   unsigned int new_index = (focused_monitor_index + 1) % monitors.size();
 
   Monitor *monitor = &monitors[new_index];
@@ -452,7 +451,7 @@ void focus_previous_monitor(const Arg *arg) {
     return;
 
   // Move to the previous monitor
-  unsigned int focused_monitor_index = find_monitor_index(current_monitor);
+  unsigned int focused_monitor_index = current_monitor->index;
   unsigned int new_index = (focused_monitor_index == 0)
                                ? monitors.size() - 1
                                : focused_monitor_index - 1;
@@ -460,6 +459,42 @@ void focus_previous_monitor(const Arg *arg) {
   Monitor *monitor = &monitors[new_index];
   XClearWindow(display, current_monitor->bar);
   focus_monitor(monitor);
+}
+void sendto_next_monitor(const Arg *arg) {
+  if (monitors.empty() || !focused_window)
+    return;
+
+  // Move to the next monitor
+  unsigned int focused_monitor_index = current_monitor->index;
+  unsigned int new_index = (focused_monitor_index + 1) % monitors.size();
+
+  Monitor *monitor = &monitors[new_index];
+  Client *client = find_client(focused_window);
+  send_to_monitor(client, &monitors[focused_monitor_index],
+                  &monitors[new_index], true);
+  focus_next_monitor(arg);
+  arrange_windows();
+  movement_warp(&focused_window);
+}
+
+void sendto_previous_monitor(const Arg *arg) {
+  if (monitors.empty() || !focused_window)
+    return;
+
+  // Move to the previous monitor
+  unsigned int focused_monitor_index = current_monitor->index;
+  unsigned int new_index = (focused_monitor_index == 0)
+                               ? monitors.size() - 1
+                               : focused_monitor_index - 1;
+
+  Monitor *monitor = &monitors[new_index];
+  Client *client = find_client(focused_window);
+  send_to_monitor(client, &monitors[focused_monitor_index],
+                  &monitors[new_index],
+                  true); // the function arranges the prev window
+  focus_previous_monitor(arg);
+  arrange_windows();
+  movement_warp(&focused_window);
 }
 
 void change_focused_window_cfact(const Arg *arg) {
@@ -521,35 +556,28 @@ void movemouse(const Arg *arg) {
 
       new_x = ocx + (ev.xmotion.x - x);
       new_y = ocy + (ev.xmotion.y - y);
-      if (abs(current_monitor->x - new_x) < snap)
+      if ((current_monitor->x - new_x) < snap)
         new_x = current_monitor->x;
       else if (((current_monitor->x + current_monitor->width) -
                 (new_x + WIDTH(client))) < snap)
         new_x = current_monitor->x + current_monitor->width - WIDTH(client);
-      if (abs(current_monitor->y + current_workspace->bar_height - new_y) <
-          snap)
+      if ((current_monitor->y + current_workspace->bar_height - new_y) < snap)
         new_y = current_monitor->y + current_workspace->bar_height;
       else if (((current_monitor->y + current_monitor->height) -
                 (new_y + HEIGHT(client))) < snap)
         new_y = current_monitor->y + current_monitor->height - HEIGHT(client);
-      /* if (!c->isfloating && selmon->lt[selmon->sellt]->arrange && */
-      /*     (abs(new_x - c->x) > snap || abs(new_y - c->y) > snap)) */
-      /*   togglefloating(NULL); */
-      /* if (!selmon->lt[selmon->sellt]->arrange || c->isfloating) */
-
-      client->x = new_x;
-      client->y = new_y;
       XMoveResizeWindow(display, client->window, new_x, new_y, client->width,
                         client->height);
       break;
     }
   } while (ev.type != ButtonRelease);
+  client->x = new_x;
+  client->y = new_y;
   XUngrabPointer(display, CurrentTime);
-  /* if ((m = recttomon(c->x, c->y, c->w, c->h)) != selmon) { */
-  /*   sendmon(c, m); */
-  /*   selmon = m; */
-  /*   focus(NULL); */
-  /* } */
+  Monitor *m = rect_to_mon(client->x, client->y, client->width, client->height);
+  if (m && client && m->index != client->monitor) {
+      send_to_monitor(client, &monitors[client->monitor],m);
+  }
   // code for monitors check it
 }
 void resizemouse(const Arg *arg) {
@@ -558,7 +586,7 @@ void resizemouse(const Arg *arg) {
   XEvent ev;
   Time lastMotionTime = 0;
 
-  if (client->fullscreen ||
+  if (!client || client->fullscreen ||
       current_workspace->layout ==
           1) // no support for resizing fullscreen windows by mouse or moncole
 
@@ -627,13 +655,10 @@ void resizemouse(const Arg *arg) {
 
   while (XCheckMaskEvent(display, EnterWindowMask, &ev))
     ;
-  /* if ((activeMonitor = recttomon(client->x, client->y, client->w, client->h))
-   * != */
-  /*     selmon) { */
-  /*   sendmon(client, activeMonitor); */
-  /*   selmon = activeMonitor; */
-  /*   focus(NULL); */
-  /* } */
+  Monitor *m = rect_to_mon(client->x, client->y, client->width, client->height);
+  if (m && client && m->index != client->monitor) {
+      send_to_monitor(client, &monitors[client->monitor],m);
+  }
 }
 void toggle_sticky(const Arg *arg) {
 

@@ -33,6 +33,8 @@
 #define CLEANMASK(mask)                                                        \
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
            Mod4Mask | Mod5Mask))
+#define INTERSECT(x,y,w,h,m)    (std::max(0, std::max((x)+(w),(m).x+(m).width) - std::max((x),(m).x)) \
+                               * std::max(0, std::max((y)+(h),(m).y+(m).height) - std::max((y),(m).y)))
 
 static unsigned int numlockmask = 0;
 struct Monitor;
@@ -40,11 +42,12 @@ struct Monitor;
 struct Client {
   Window window; // the window id
   int x, y;
-  unsigned int width, height;
+  int width, height;
   bool floating = false;   // Indicates whether the window is floating or tiled
   bool fullscreen = false; // Full-screen flag
   bool sticky = false;     // sticky flag
   float cfact = 1;         // Size factor relative to other clients
+  unsigned int monitor;    // the monitor the window is on
 };
 
 // to pass arguments to the functions
@@ -159,10 +162,8 @@ static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
                       unsigned long d2, unsigned long d3, unsigned long d4);
 void detect_monitors();
 Monitor *find_monitor_for_window(int x, int y);
-void assign_client_to_monitor(Client *client);
 Monitor *find_monitor_by_coordinates(int x, int y);
 void focus_monitor(Monitor *monitor);
-unsigned int find_monitor_index(Monitor *monitor);
 void make_fullscreen(Client *client, int screen_width, int screen_height , bool raise = true) ;
 void monocle_windows(std::vector<Client *> *clients, int master_width,
                      int screen_height, int screen_width) ;
@@ -188,3 +189,8 @@ void updatewindowtype(Client *c) ;
 Atom getatomprop(Client *c, Atom prop) ;
 void change_focused_window(const Arg *arg) ;
 void clean_clients(std::unordered_set<Window> &windows) ;
+Monitor *rect_to_mon(int x, int y, int w, int h) ;
+void send_to_monitor(Client *client , Monitor * prev_monitor,Monitor *next_monitor , bool rearrange = true);
+void sendto_next_monitor(const Arg *arg) ;
+void sendto_previous_monitor(const Arg *arg) ;
+void assign_client_to_monitor(Client *client) ;
