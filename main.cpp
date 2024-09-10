@@ -53,6 +53,8 @@ void create_bar() {
                      &render_color, &xft_color);
 }
 void update_bar() {
+  if (!SHOW_BAR)
+    return;
   int screen_width = DisplayWidth(display, DefaultScreen(display));
 
   XClearWindow(display, bar_window);
@@ -372,7 +374,7 @@ int main() {
   // Capture key presses for the mod key (e.g., Mod4Mask) with any key
 
   grab_keys();
-  create_bar();
+  (SHOW_BAR) ? create_bar() : (void)0;
   update_bar();
   run();
 
@@ -382,8 +384,12 @@ int main() {
 }
 void tile_windows() {
   unsigned int num_tiled_clients = 0;
-
+  std::vector<Client> fullscrren_clients;
   // First, count the number of non-floating (tiled) clients
+  if (clients->size() == 1) {
+    one_window();
+    return;
+  }
   for (const auto &client : *clients) {
     if (!client.floating) {
       ++num_tiled_clients;
@@ -404,6 +410,10 @@ void tile_windows() {
   for (unsigned int i = 0; i < clients->size(); ++i) {
     Client *c = &(*clients)[i];
     if (c->floating) {
+      // Skip floating windows and store their indices for later raising
+      continue;
+    }
+    if (c->is_fullscreen) {
       // Skip floating windows and store their indices for later raising
       continue;
     }
@@ -519,6 +529,17 @@ void toggle_fullscreen(const Arg *arg) {
                           2); // Adjust to your border size
 
     client->is_fullscreen = false;
+  }
+}
+void one_window() {
+  if (clients->size() == 1) {
+    int screen_width = DisplayWidth(display, DefaultScreen(display));
+    int screen_height = DisplayHeight(display, DefaultScreen(display));
+
+    int height = screen_height - BAR_HEIGHT ; 
+
+    // Move and resize the window to fit within the calculated region
+    XMoveResizeWindow(display, clients->front().window, 0, BAR_HEIGHT, screen_width, height);
   }
 }
 
