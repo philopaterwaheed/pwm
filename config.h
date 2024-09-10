@@ -9,6 +9,7 @@
 #define SHIFT ShiftMask // Usually the shift key
 #define BAR_HEIGHT 30   // Height of the bar in pixels
 
+static bool SHOW_BAR = true; // Whether to show the bar or not
 static std::string BAR_FONT = "NotoMono Nerd Font:5";
 static int BORDER_WIDTH = 1; // Width of the window border in pixels
 static unsigned long BORDER_COLOR =

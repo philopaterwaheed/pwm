@@ -22,6 +22,7 @@
            Mod4Mask | Mod5Mask))
 
 static unsigned int numlockmask = 0;
+static int bar_hight_place_holder = 0;
 
 struct Client {
   Window window; // the window id
@@ -87,6 +88,7 @@ void switch_workspace(const Arg *arg);
 void move_window_to_workspace(const Arg *arg);
 void toggle_fullscreen(const Arg *arg) ;
 void set_master(const Arg *arg);
+void one_window() ;
 // ///
 // event handlers
 void handle_focus_in(XEvent *e);
