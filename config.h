@@ -7,11 +7,11 @@
 // constatns
 #define MOD Mod4Mask    // Usually the Windows key
 #define SHIFT ShiftMask // Usually the shift key
-#define BAR_HEIGHT 30   // Height of the bar in pixels
 
 static bool SHOW_BAR = true; // Whether to show the bar or not
 static std::string BAR_FONT = "NotoMono Nerd Font:5";
 static int BORDER_WIDTH = 1; // Width of the window border in pixels
+static int  BAR_HEIGHT = 30;   // Height of the bar in pixels
 static unsigned long BORDER_COLOR =
     0xd3d3d3; // gray color for borders (hex value)
 static unsigned long FOCUSED_BORDER_COLOR =
@@ -37,6 +37,7 @@ static std::vector<shortcut> shortcuts = {
     {MOD, XK_t, lunch, {.v = term}},
     {MOD, XK_Print, lunch, {.v = s_shot}},
     {MOD, XK_Return, toggle_fullscreen, {0}},
+    {MOD, XK_b, toggle_bar, {0}},
     {MOD, XK_Right, resize_focused_window_x, {.i = +20}},
     {MOD, XK_Left, resize_focused_window_x, {.i = -20}},
     {MOD, XK_Down, resize_focused_window_y, {.i = +20}},
