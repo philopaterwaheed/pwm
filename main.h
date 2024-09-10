@@ -74,6 +74,7 @@ void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
                                  int x, int y, int screen) ;
 void one_window() ;
+void cleanup() ;
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg *arg);
 void resize_focused_window_y(const Arg *arg);
