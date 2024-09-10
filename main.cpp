@@ -21,6 +21,7 @@ std::unordered_map<FcChar32, XftFont *> font_cache;
 
 short current_workspace = 0;
 std::vector<Workspace> workspaces(NUM_WORKSPACES);
+/* std::vector<Button> buttons(NUM_WORKSPACES); */
 auto *clients = &workspaces[0].clients;
 
 std::string status = "pwm by philo";
@@ -110,16 +111,18 @@ void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
     i += bytes;
   }
 }
-int get_utf8_string_width(Display* display, XftFont* font, const std::string& text) {
-    // Convert std::string to XftChar8 array
-    
-    XGlyphInfo extents;
-    XftChar8* utf8_string = reinterpret_cast<XftChar8*>(const_cast<char*>(text.c_str()));
-    
-    // Measure the width of the UTF-8 string
-    XftTextExtentsUtf8(display, font, utf8_string, text.length(), &extents);
+int get_utf8_string_width(Display *display, XftFont *font,
+                          const std::string &text) {
+  // Convert std::string to XftChar8 array
 
-    return extents.width;
+  XGlyphInfo extents;
+  XftChar8 *utf8_string =
+      reinterpret_cast<XftChar8 *>(const_cast<char *>(text.c_str()));
+
+  // Measure the width of the UTF-8 string
+  XftTextExtentsUtf8(display, font, utf8_string, text.length(), &extents);
+
+  return extents.width;
 }
 void create_bar() {
   int screen_width = DisplayWidth(display, DefaultScreen(display));
@@ -128,7 +131,8 @@ void create_bar() {
   // Create the bar window
   bar_window = XCreateSimpleWindow(display, root, 0, 0, screen_width,
                                    BAR_HEIGHT, 0, 0, 0x000000);
-  XSelectInput(display, bar_window, ExposureMask | KeyPressMask | ButtonPressMask);
+  XSelectInput(display, bar_window,
+               ExposureMask | KeyPressMask | ButtonPressMask);
   XMapWindow(display, bar_window);
   // Load the font using Xft
   xft_font = XftFontOpenName(display, DefaultScreen(display), BAR_FONT.c_str());
@@ -149,25 +153,26 @@ void update_bar() {
 
   XClearWindow(display, bar_window);
 
-  // Workspace names
-  std::string workspace_status = "";
+  // Draw workspace buttons
   for (int i = 0; i < NUM_WORKSPACES; ++i) {
+
+    int x = i * BUTTONS_WIDTH;
+    // Highlight the current workspace button
     if (i == current_workspace) {
-      workspace_status += "[*] ";
-    } else {
-      workspace_status += "[ ] ";
+      XSetForeground(display, DefaultGC(display, DefaultScreen(display)),
+                     0x3399FF); // Light blue background
+      XFillRectangle(display, bar_window,
+                     DefaultGC(display, DefaultScreen(display)), x, 0,
+                     BUTTONS_WIDTH, BAR_HEIGHT);
     }
+    std::string button_label = workspaces_names[i];
+    draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color,
+                                button_label.c_str(), x + 10, 15,
+                                XDefaultScreen(display));
   }
-
-  // Draw workspace names using Xft
-  draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color,
-                              workspace_status, 10, 15,
-                              XDefaultScreen(display));
-
-  /* XftDrawStringUtf8(xft_draw, &xft_color, xft_font,  500 + status.size() ,
-   * 15, reinterpret_cast<const FcChar8*>(status.c_str()), status.size()); */
   draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color, status,
-                              get_utf8_string_width(display, xft_font, status), 15, XDefaultScreen(display));
+                              get_utf8_string_width(display, xft_font, status),
+                              15, XDefaultScreen(display));
 }
 void handle_focus_in(XEvent *e) {
   XFocusChangeEvent *ev = &e->xfocus;
@@ -405,6 +410,9 @@ void run() {
       update_status(&ev);
       update_bar();
       break;
+    case ButtonPress:
+      handle_button_press_event(&ev);
+      break;
     }
   }
 }
@@ -554,16 +562,25 @@ void tile_windows() {
     if (tiled_index == 0) { // First window is the master
       // Master window positioning with border
       XMoveResizeWindow(
-          display, c->window, GAP_SIZE, BAR_HEIGHT + GAP_SIZE, // Position with gaps and bar height
-          master_width - 2 * (GAP_SIZE + BORDER_WIDTH), // Width adjusted for border and gaps
-          screen_height - BAR_HEIGHT - 2 * (GAP_SIZE + BORDER_WIDTH) // Height adjusted for bar, border, and gaps
+          display, c->window, GAP_SIZE,
+          BAR_HEIGHT + GAP_SIZE, // Position with gaps and bar height
+          master_width -
+              2 * (GAP_SIZE +
+                   BORDER_WIDTH), // Width adjusted for border and gaps
+          screen_height - BAR_HEIGHT -
+              2 * (GAP_SIZE +
+                   BORDER_WIDTH) // Height adjusted for bar, border, and gaps
       );
     } else {
       // Stack windows positioning with border
-      int stack_width = screen_width - master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
-      int stack_height = (screen_height - BAR_HEIGHT - GAP_SIZE - 2 * BORDER_WIDTH) / (num_tiled_clients - 1);
+      int stack_width =
+          screen_width - master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
+      int stack_height =
+          (screen_height - BAR_HEIGHT - GAP_SIZE - 2 * BORDER_WIDTH) /
+          (num_tiled_clients - 1);
       int x = master_width + GAP_SIZE;
-      int y = BAR_HEIGHT + GAP_SIZE + (tiled_index - 1) * (stack_height + GAP_SIZE);
+      int y =
+          BAR_HEIGHT + GAP_SIZE + (tiled_index - 1) * (stack_height + GAP_SIZE);
 
       XMoveResizeWindow(display, c->window, x, y, // Position with gaps
                         stack_width,              // Width adjusted for border

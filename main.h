@@ -3,21 +3,17 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <algorithm>
-#include <any>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <initializer_list>
 #include <string>
 #include <unistd.h>
 #include <variant>
 #include <vector>
 
-
 #define CLEANMASK(mask)                                                        \
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
            Mod4Mask | Mod5Mask))
-
 
 static unsigned int numlockmask = 0;
 
@@ -52,6 +48,12 @@ struct Workspace {
   std::vector<Client> clients = {};
   Layout layout;
 };
+/* union Button { */
+/*   std::string name; */
+/*   unsigned int id; */
+/*   void (*func)(const Arg *arg); */
+/*   Arg arg; */
+/* }; */
 
 Client *find_client(Window w);
 int get_focused_window_index();
@@ -62,7 +64,7 @@ void handle_enter_notify(XEvent *e);
 void handle_map_request(XEvent *e);
 void handle_configure_request(XEvent *e);
 void handle_key_press(XEvent *e);
-void update_status(XEvent *ev) ;
+void update_status(XEvent *ev);
 void warp_pointer_to_window(Window *win);
 void restack_windows();
 // arg functions to invoke with shortcut

@@ -14,13 +14,14 @@ static int BORDER_WIDTH = 1; // Width of the window border in pixels
 static unsigned long BORDER_COLOR =
     0xd3d3d3; // gray color for borders (hex value)
 static unsigned long FOCUSED_BORDER_COLOR =
-    0x000000;            // black color for focused window
-static int GAP_SIZE = 5; // Size of the gap around windows in pixels
+    0x000000;                  // black color for focused window
+static int GAP_SIZE = 2;       // Size of the gap around windows in pixels
+static int BUTTONS_WIDTH = 30; // Width of the buttons in pixels
 
 // all about workspaces
-static const std::string workspaces_names[5] = {"_", "", "", "",
-                                                ""};
-static int NUM_WORKSPACES = 5; // Number of workspaces
+#define NUM_WORKSPACES 5 // Number of workspaces
+static const std::string workspaces_names[NUM_WORKSPACES] = {
+    "_", "", "", "", ""};
 #define WORKSPACEKEYS(KEY, WORKSPACENUM)                                       \
   {MOD, KEY, switch_workspace, {.i = WORKSPACENUM}}, {                         \
     MOD | SHIFT, KEY, move_window_to_workspace, { .i = WORKSPACENUM }          \
