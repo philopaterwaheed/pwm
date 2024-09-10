@@ -28,6 +28,7 @@ struct Client {
   int x, y;
   unsigned int width, height;
   bool floating = false; // Indicates whether the window is floating or tiled
+    bool is_fullscreen = false;     // Full-screen flag
 };
 
 // to pass arguments to the functions
@@ -52,6 +53,7 @@ struct Layout {
 };
 struct Workspace {
   std::vector<Client> clients = {};
+    Window master = None;
   Layout layout;
 };
 /* union Button { */
@@ -83,6 +85,8 @@ void toggle_floating(const Arg *arg);
 void swap_window(const Arg *arg);
 void switch_workspace(const Arg *arg);
 void move_window_to_workspace(const Arg *arg);
+void toggle_fullscreen(const Arg *arg) ;
+void set_master(const Arg *arg);
 // ///
 // event handlers
 void handle_focus_in(XEvent *e);

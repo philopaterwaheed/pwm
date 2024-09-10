@@ -5,10 +5,11 @@
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
                     // children of it and covers all the screen
-extern Window focused_window, master_window, bar_window;
-extern XftFont *xft_font;
-extern XftDraw *xft_draw;
-extern XftColor xft_color;
+extern Window focused_window, bar_window;
+extern std::vector<Workspace> workspaces;
+
+extern short current_workspace;
+
 extern std::vector<Client> *clients;
 void handle_button_press_event(XEvent *e) {
   int x = e->xbutton.x;
@@ -61,6 +62,7 @@ void handle_map_request(XEvent *e) {
   clients->push_back({ev->window, wa.x, wa.y,
                       static_cast<unsigned int>(wa.width),
                       static_cast<unsigned int>(wa.height)});
+  workspaces[current_workspace].master = clients->back().window;
   tile_windows();
 }
 

@@ -5,7 +5,7 @@
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
-Window focused_window = None, master_window = None, bar_window;
+Window focused_window = None, bar_window;
 XftFont *xft_font;
 XftDraw *xft_draw;
 XftColor xft_color;
@@ -78,7 +78,6 @@ void update_bar() {
                               get_utf8_string_width(display, xft_font, status),
                               15, XDefaultScreen(display));
 }
-
 
 void resize_focused_window_y(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
@@ -204,7 +203,6 @@ void lunch(const Arg *arg) {
   }
 }
 
-
 void run() {
   XEvent ev;
   while (!XNextEvent(display, &ev)) {
@@ -248,9 +246,23 @@ void kill_focused_window(const Arg *arg) {
                                   }),
                    clients->end());
     XKillClient(display, focused_window);
+    if (focused_window == workspaces[current_workspace].master) {
+      workspaces[current_workspace].master = None;
+      if (workspaces[current_workspace].clients.size() > 0) {
+        workspaces[current_workspace].master =
+            workspaces[current_workspace].clients[0].window;
+      }
+    }
     focused_window = None; // Reset focused window
                            //
     tile_windows();
+  }
+}
+void set_master(const Arg *arg) {
+  if (focused_window != None) {
+    workspaces[current_workspace].master = focused_window;
+    tile_windows();
+    warp_pointer_to_window(&focused_window);
   }
 }
 
@@ -388,7 +400,7 @@ void tile_windows() {
   // Calculate master width (60% of screen width)
   int master_width = screen_width * 0.6;
 
-  unsigned int tiled_index = 0; // To track the position of tiled clients
+  unsigned int tiled_index = 1; // To track the position of tiled clients
   for (unsigned int i = 0; i < clients->size(); ++i) {
     Client *c = &(*clients)[i];
     if (c->floating) {
@@ -396,7 +408,8 @@ void tile_windows() {
       continue;
     }
 
-    if (tiled_index == 0) { // First window is the master
+    if (c->window ==
+        workspaces[current_workspace].master) { // First window is the master
       // Master window positioning with border
       XMoveResizeWindow(
           display, c->window, GAP_SIZE,
@@ -423,9 +436,8 @@ void tile_windows() {
                         stack_width,              // Width adjusted for border
                         stack_height              // Height adjusted for border
       );
+      ++tiled_index; // Only increment for non-floating windows
     }
-
-    ++tiled_index; // Only increment for non-floating windows
 
     XLowerWindow(display, c->window); // Lower windows to avoid overlap
     XSetWindowBorderWidth(display, c->window, BORDER_WIDTH); // Set border width
@@ -469,6 +481,44 @@ void toggle_floating(const Arg *arg) {
 
     // Optionally warp the mouse pointer to the newly floating window
     warp_pointer_to_window(&client->window);
+  }
+}
+void toggle_fullscreen(const Arg *arg) {
+  auto client = find_client(focused_window);
+  if (!client)
+    return;
+
+  if (!client->is_fullscreen) {
+    // Save the original position and size
+    XWindowAttributes wa;
+    XGetWindowAttributes(display, client->window, &wa);
+    client->x = wa.x;
+    client->y = wa.y;
+    client->width = wa.width;
+    client->height = wa.height;
+
+    // Go full-screen (resize to cover the entire screen)
+    XMoveResizeWindow(display, client->window, 0, 0,
+                      DisplayWidth(display, DefaultScreen(display)),
+                      DisplayHeight(display, DefaultScreen(display)));
+
+    // Remove window borders if needed
+    XSetWindowBorderWidth(display, client->window, 0);
+
+    // Raise the window to the top
+    XRaiseWindow(display, client->window);
+
+    client->is_fullscreen = true;
+  } else {
+    // Exit full-screen and restore the original size and position
+    XMoveResizeWindow(display, client->window, client->x, client->y,
+                      client->width, client->height);
+
+    // Restore the window border
+    XSetWindowBorderWidth(display, client->window,
+                          2); // Adjust to your border size
+
+    client->is_fullscreen = false;
   }
 }
 
