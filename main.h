@@ -1,7 +1,5 @@
 #pragma once
 
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -10,6 +8,14 @@
 #include <unistd.h>
 #include <variant>
 #include <vector>
+#include <X11/X.h>
+#include <X11/Xft/Xft.h>
+#include <X11/Xlib.h>
+#include <cstdlib>
+#include <fontconfig/fontconfig.h>
+#include <iostream>
+#include <string>
+#include <unordered_map>
 
 #define CLEANMASK(mask)                                                        \
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
@@ -58,15 +64,13 @@ struct Workspace {
 Client *find_client(Window w);
 int get_focused_window_index();
 void tile_windows();
-void handle_focus_in(XEvent *e);
-void handle_focus_out(XEvent *e);
-void handle_enter_notify(XEvent *e);
-void handle_map_request(XEvent *e);
-void handle_configure_request(XEvent *e);
-void handle_key_press(XEvent *e);
 void update_status(XEvent *ev);
 void warp_pointer_to_window(Window *win);
 void restack_windows();
+void update_bar() ;
+void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
+                                 XftColor *color, const std::string &text,
+                                 int x, int y, int screen) ;
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg *arg);
 void resize_focused_window_y(const Arg *arg);
@@ -79,3 +83,20 @@ void toggle_floating(const Arg *arg);
 void swap_window(const Arg *arg);
 void switch_workspace(const Arg *arg);
 void move_window_to_workspace(const Arg *arg);
+// ///
+// event handlers
+void handle_focus_in(XEvent *e);
+void handle_focus_out(XEvent *e);
+void handle_enter_notify(XEvent *e);
+void handle_map_request(XEvent *e);
+void handle_configure_request(XEvent *e);
+void handle_key_press(XEvent *e);
+void handle_key_press(XEvent *e) ;
+void handle_button_press_event(XEvent *e) ;
+// font functions
+void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
+                                 XftColor *color, const std::string &text,
+                                 int x, int y, int screen);
+int get_utf8_string_width(Display *display, XftFont *font,
+                          const std::string &text) ;
+XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) ;
