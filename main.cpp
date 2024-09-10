@@ -31,8 +31,8 @@ std::vector<XftFont *> fallbackFonts;
 
 extern XftFont *xft_font;
 
-bool multi_monitor = false; // to detect if there are multiple monitors to
-                            // cancle montion notify if there is not
+int multi_monitor = false; // to detect if there are multiple monitors to
+                           // cancle montion notify if there is not
 
 // to store button widths and utf8 strings
 int BUTTONS_WIDTHS[NUM_WORKSPACES + 1];
@@ -133,6 +133,13 @@ void update_bar() {
                                 BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] / 3,
                                 BAR_Y, screen, current_monitor->width);
   }
+  status = std::to_string(current_monitor->index);
+  Client *c = find_client(focused_window);
+  if (c) {
+
+    status += std::to_string(c->monitor);
+  }
+
   XftChar8 *status_utf8 =
       reinterpret_cast<XftChar8 *>(const_cast<char *>(status.c_str()));
 
@@ -288,10 +295,7 @@ void detect_monitors() {
   int num_monitors;
   XineramaScreenInfo *screens = XineramaQueryScreens(display, &num_monitors);
 
-  if (num_monitors > 1) {
-
-    multi_monitor = true;
-  }
+  multi_monitor = num_monitors > 1;
   for (int i = 0; i < num_monitors; i++) {
     Monitor monitor;
     monitor.screen = screens[i].screen_number;
@@ -299,6 +303,7 @@ void detect_monitors() {
     monitor.y = screens[i].y_org;
     monitor.width = screens[i].width;
     monitor.height = screens[i].height;
+    monitor.index = i;
     monitors.push_back(monitor);
   }
 
@@ -312,28 +317,7 @@ void detect_monitors() {
     sticky = &(current_monitor->sticky);
   }
 }
-Monitor *find_monitor_for_window(int x, int y) {
-  for (auto &monitor : monitors) {
-    if (x >= monitor.x && x < monitor.x + monitor.width && y >= monitor.y &&
-        y < monitor.y + monitor.height) {
-      return &monitor;
-    }
-  }
-  return nullptr; // Default to no monitor
-}
 
-void assign_client_to_monitor(Client *client) {
-  XWindowAttributes wa;
-  XGetWindowAttributes(display, client->window, &wa);
-
-  Monitor *monitor = find_monitor_for_window(wa.x, wa.y);
-  if (!monitor->current_workspace) {
-    monitor->current_workspace = &(*workspaces)[0];
-  }
-  if (monitor) {
-    monitor->current_workspace->clients.push_back(*client);
-  }
-}
 Monitor *find_monitor_by_coordinates(int x, int y) {
   for (auto &monitor : monitors) {
     if (x >= monitor.x && x < monitor.x + monitor.width && y >= monitor.y &&
@@ -358,15 +342,6 @@ void focus_monitor(Monitor *monitor) {
   sticky = &(current_monitor->sticky);
   focused_window = None;
   update_bar();
-  warp(NULL);
-}
-unsigned int find_monitor_index(Monitor *monitor) {
-  for (unsigned int i = 0; i < monitors.size(); ++i) {
-    if (&monitors[i] == monitor) {
-      return i;
-    }
-  }
-  return -1; // Not found
 }
 void toggle_layout() {
   if (!(current_workspace->layout == 1 &&
@@ -510,8 +485,8 @@ void setup() {
                   PropModeReplace, (unsigned char *)netatom, NetLast);
   wa.cursor = cursors[CurNormal];
   wa.event_mask = SubstructureRedirectMask | SubstructureNotifyMask |
-                  ButtonPressMask | (multi_monitor & MotionNotify) | EnterWindowMask |
-                  LeaveWindowMask | StructureNotifyMask | PropertyChangeMask;
+                  ButtonPressMask | EnterWindowMask | LeaveWindowMask |
+                  StructureNotifyMask | PropertyChangeMask | PointerMotionMask;
   XChangeWindowAttributes(display, root, CWEventMask | CWCursor, &wa);
   XSelectInput(display, root, wa.event_mask);
 }
@@ -601,4 +576,50 @@ void updatewindowtype(Client *c) {
     set_fullscreen(c, 1);
   if (wtype == netatom[NetWMWindowTypeDialog])
     c->floating = 1;
+}
+Monitor *rect_to_mon(int x, int y, int w, int h) {
+  Monitor *monitor;
+  int a, area = 0;
+
+  for (auto m : monitors) {
+    a = INTERSECT(x, y, w, h, m);
+    if (a > area) {
+      area = a;
+      monitor = &m;
+    }
+  }
+  return monitor;
+}
+
+void send_to_monitor(Client *client, Monitor *prev_monitor,
+                     Monitor *next_monitor, bool rearrange) {
+  if (!client || !prev_monitor || !next_monitor)
+    return;
+  client->monitor = next_monitor->index;
+  if (client->sticky) {
+    next_monitor->sticky.push_back(*client);
+    prev_monitor->sticky.erase(
+        std::remove_if(
+            prev_monitor->sticky.begin(), prev_monitor->sticky.end(),
+            [&client](const Client &c) { return c.window == client->window; }),
+        prev_monitor->sticky.end());
+    return;
+  } else {
+    next_monitor->workspaces[next_monitor->at].clients.push_back(*client);
+    if (client->window == current_workspace->master) {
+      current_workspace->master = None;
+      prev_monitor->workspaces[prev_monitor->at].clients.erase(
+          std::remove_if(
+              prev_monitor->workspaces[prev_monitor->at].clients.begin(),
+              prev_monitor->workspaces[prev_monitor->at].clients.end(),
+              [&client](const Client &c) {
+                return c.window == client->window;
+              }),
+          prev_monitor->workspaces[prev_monitor->at].clients.end());
+    }
+    (rearrange) ? arrange_windows()
+                : void(); // arrange windows for next monitor
+    // the bool for if we sending a float client we don't need the overhead of
+    // rearrange
+  }
 }

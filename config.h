@@ -10,17 +10,17 @@
 #define SHIFT ShiftMask // Usually the shift key
 #define NUM_LAYOUTS 4
 #define BORDER_WIDTH 2 // Width of the window border in pixels
-#define BAR_Y 15 //where the bar font should be placed
+#define BAR_Y 15       // where the bar font should be placed
 
 static const unsigned int snap = 32; /* snap pixel */
-static float master_size = .6; // the intial size of the master window
+static float master_size = .6;       // the intial size of the master window
 // all about the bar
 static bool SHOW_BAR = true; // Whether to show the bar or not
-static std::string BAR_FONT =
-    "NotoMono Nerd Font:size=10";    
-static double SPACIL_CHAR_FONT_SIZE =10;     // font size for special characters and icons
-static int BAR_HEIGHT = 20;    // Height of the bar in pixels
-static int BUTTON_WIDTH = 30; //min  button width
+static std::string BAR_FONT = "NotoMono Nerd Font:size=10";
+static double SPACIL_CHAR_FONT_SIZE =
+    10;                       // font size for special characters and icons
+static int BAR_HEIGHT = 20;   // Height of the bar in pixels
+static int BUTTON_WIDTH = 30; // min  button width
 static Layout LAYOUTS[NUM_LAYOUTS] = {
     {0, "[]=", tile_windows},
     {1, "M", monocle_windows},
@@ -47,8 +47,8 @@ static int GAP_SIZE = 2; // Size of the gap around windows in pixels
 
 // all about workspaces
 #define NUM_WORKSPACES 5 // Number of workspaces
-static const char * workspaces_names[NUM_WORKSPACES] = {
-    "_", "", "", "", ""};
+static const char *workspaces_names[NUM_WORKSPACES] = {"_", "", "",
+                                                       "", ""};
 #define WORKSPACEKEYS(KEY, WORKSPACENUM)                                       \
   {MOD, KEY, switch_workspace, {.i = WORKSPACENUM}}, {                         \
     MOD | SHIFT, KEY, move_window_to_workspace, { .i = WORKSPACENUM }          \
@@ -56,12 +56,13 @@ static const char * workspaces_names[NUM_WORKSPACES] = {
 struct Monitor {
   short at = 0;
   int x, y, screen;
-  unsigned int width, height;
+  int width, height;
   std::vector<Workspace> workspaces = std::vector<Workspace>(NUM_WORKSPACES);
   std::vector<Client> sticky;
   Workspace *current_workspace = NULL;
   Window bar;
   XftDraw *xft_draw;
+  unsigned int index = 0;
 };
 ///
 static const char dmenufont[] = "monospace:size=10";
@@ -74,7 +75,7 @@ static const char col_cyan[] = "#282A36";
 static const char *term[] = {"st", NULL};
 static const char *bridown[] = {"sudo", "brillo", "-q", "-U", "5", NULL};
 static const char *briup[] = {"sudo", "brillo", "-q", "-A", "5", NULL};
-static const char *s_shot[] = {"flameshot" , "gui", NULL}; // for screenshots
+static const char *s_shot[] = {"flameshot", "gui", NULL}; // for screenshots
 static const char *dmenucmd[] = {
     "dmenu_run", "-m",      "0",   "-fn",    dmenufont, "-nb",     col_gray1,
     "-nf",       col_gray3, "-sb", col_cyan, "-sf",     col_gray4, NULL};
@@ -111,6 +112,8 @@ static std::vector<shortcut> shortcuts = {
     {MOD | SHIFT, XK_l, change_focused_window_cfact, {.f = +.05}},
     {MOD | SHIFT, XK_h, change_focused_window_cfact, {.f = -.05}},
     {MOD | SHIFT, XK_f, set_master, {0}},
+    {MOD | SHIFT, XK_comma, sendto_next_monitor, {0}},
+    {MOD | SHIFT, XK_period, sendto_previous_monitor, {0}},
     {MOD | ALT, XK_space, change_layout, {0}},
     {MOD | ALT, XK_m, change_layout, {.i = 1}},
     {MOD | ALT, XK_g, change_layout, {.i = 2}},

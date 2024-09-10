@@ -66,6 +66,7 @@ void handle_focus_out(XEvent *e) {
     return;
   /* else */
   XSetWindowBorder(display, ev->window, BORDER_COLOR);
+  /* focused_window = None; */
 }
 
 // handle the mouse enter event
@@ -86,12 +87,15 @@ void handle_map_request(XEvent *e) {
     return;
 
   XSetWindowBorder(display, ev->window, BORDER_COLOR);
-  Client client = {ev->window,
-                   wa.x,
-                   wa.y,
-                   static_cast<unsigned int>(wa.width),
-                   static_cast<unsigned int>(wa.height),
-                   .floating = wants_floating(ev->window)};
+  Client client = {
+      ev->window,
+      (wa.x),
+      (wa.y),
+      (wa.width),
+      (wa.height),
+      .floating = wants_floating(ev->window),
+      .monitor = current_monitor->index,
+  };
   clients->push_back(client);
   if (!client.floating) {
     current_workspace->master = clients->back().window;
@@ -112,21 +116,31 @@ void handle_map_request(XEvent *e) {
 
 void handle_configure_request(XEvent *e) {
   // this event is sent when a window wants to change its size/position
-  Client *c = find_client(e->xconfigurerequest.window);
-  if (c && c->floating) {
-    XConfigureRequestEvent *ev = &e->xconfigurerequest;
+  // not sure if this is the optimal solotion but I was afraid jst searshing
+  // inside the onl visible works spaces would cause problems
+  for (auto m : monitors) {
+    for (auto w : m.workspaces) {
+      for (auto c : w.clients) {
+        if (c.window == e->xconfigurerequest.window) {
+          if (c.floating) {
+            XConfigureRequestEvent *ev = &e->xconfigurerequest;
 
-    XWindowChanges changes;
-    changes.x = ev->x;
-    changes.y = ev->y;
-    changes.width = ev->width;
-    changes.height = ev->height;
-    changes.border_width = ev->border_width;
-    changes.sibling = ev->above;
-    changes.stack_mode = ev->detail;
+            XWindowChanges changes;
+            c.x = changes.x = ev->x;
+            c.y = changes.y = ev->y;
+            c.width = changes.width = ev->width;
+            c.height = changes.height = ev->height;
+            changes.border_width = ev->border_width;
+            changes.sibling = ev->above;
+            changes.stack_mode = ev->detail;
 
-    set_size_hints(ev->window);
-    XConfigureWindow(display, ev->window, ev->value_mask, &changes);
+            set_size_hints(ev->window);
+            XConfigureWindow(display, ev->window, ev->value_mask, &changes);
+          }
+          break;
+        }
+      }
+    }
   }
 }
 void handle_key_press(XEvent *e) {
