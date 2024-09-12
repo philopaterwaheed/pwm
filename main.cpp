@@ -33,9 +33,8 @@ void create_bar() {
   int screen_height = DisplayHeight(display, DefaultScreen(display));
 
   // Create the bar window
-  bar_window =
-      XCreateSimpleWindow(display, root, 0, 0, screen_width,
-                          BAR_HEIGHT, 0, 0, 0x000000);
+  bar_window = XCreateSimpleWindow(display, root, 0, 0, screen_width,
+                                   BAR_HEIGHT, 0, 0, 0x000000);
   if (SHOW_BAR) { // for if show bar is false in the config
     XSelectInput(display, bar_window,
                  ExposureMask | KeyPressMask | ButtonPressMask);
@@ -231,6 +230,9 @@ void tile_windows() {
   if (num_tiled_clients == 0)
     return;
 
+  if (current_workspace->master == None) {
+    current_workspace->master = clients->front().window;
+  }
   int screen_width = DisplayWidth(display, DefaultScreen(display));
   int screen_height = DisplayHeight(display, DefaultScreen(display));
 
@@ -294,6 +296,7 @@ void one_window() {
     int height = screen_height - current_workspace->bar_height;
 
     // Move and resize the window to fit within the calculated region
+    current_workspace->master = clients->front().window;
     XMoveResizeWindow(display, clients->front().window, 0,
                       current_workspace->bar_height, screen_width, height);
   }
