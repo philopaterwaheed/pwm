@@ -11,11 +11,13 @@
 #include <X11/X.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
+#include <X11/Xproto.h>
 #include <cstdlib>
 #include <fontconfig/fontconfig.h>
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <err.h>
 
 #define CLEANMASK(mask)                                                        \
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
@@ -85,6 +87,7 @@ void move_window_to_workspace(const Arg *arg);
 void toggle_fullscreen(const Arg *arg) ;
 void set_master(const Arg *arg);
 void toggle_bar(const Arg *arg) ;
+void make_fullscreen(Client *client);
 // ///
 // event handlers
 void handle_focus_in(XEvent *e);
@@ -102,3 +105,6 @@ void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
 int get_utf8_string_width(Display *display, XftFont *font,
                           const std::string &text) ;
 XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) ;
+int sendevent(Window window, Atom proto) ;
+static void
+clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1, unsigned long d2, unsigned long d3, unsigned long d4);
