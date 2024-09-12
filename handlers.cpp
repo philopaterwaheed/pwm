@@ -8,7 +8,7 @@ extern Window root; // the root window top level window all other windows are
 extern Window focused_window, bar_window;
 extern std::vector<Workspace> workspaces;
 
-extern short current_workspace;
+extern Workspace *current_workspace;
 
 extern std::vector<Client> *clients;
 void handle_button_press_event(XEvent *e) {
@@ -62,7 +62,7 @@ void handle_map_request(XEvent *e) {
   clients->push_back({ev->window, wa.x, wa.y,
                       static_cast<unsigned int>(wa.width),
                       static_cast<unsigned int>(wa.height)});
-  workspaces[current_workspace].master = clients->back().window;
+  current_workspace->master = clients->back().window;
   tile_windows();
 }
 

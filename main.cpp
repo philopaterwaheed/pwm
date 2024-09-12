@@ -2,7 +2,6 @@
 #include "main.h"
 #include "config.h"
 #include <X11/Xlib.h>
-#include <utility>
 
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
@@ -12,11 +11,9 @@ XftFont *xft_font;
 XftDraw *xft_draw;
 XftColor xft_color;
 
-int bar_hight_place_holder = 0;
-short current_workspace = 0;
 std::vector<Workspace> workspaces(NUM_WORKSPACES);
-/* std::vector<Button> buttons(NUM_WORKSPACES); */
 auto *clients = &workspaces[0].clients;
+auto *current_workspace = &workspaces[0];
 
 std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
@@ -36,11 +33,15 @@ void create_bar() {
   int screen_height = DisplayHeight(display, DefaultScreen(display));
 
   // Create the bar window
-  bar_window = XCreateSimpleWindow(display, root, 0, 0, screen_width,
-                                   BAR_HEIGHT, 0, 0, 0x000000);
-  XSelectInput(display, bar_window,
-               ExposureMask | KeyPressMask | ButtonPressMask);
-  XMapWindow(display, bar_window);
+  bar_window =
+      XCreateSimpleWindow(display, root, 0, 0, screen_width,
+                          BAR_HEIGHT, 0, 0, 0x000000);
+  if (SHOW_BAR) { // for if show bar is false in the config
+    XSelectInput(display, bar_window,
+                 ExposureMask | KeyPressMask | ButtonPressMask);
+    XMapWindow(display,
+               bar_window); // we create and don't show for future errors
+  }
   // Load the font using Xft
   xft_font = XftFontOpenName(display, DefaultScreen(display), BAR_FONT.c_str());
 
@@ -56,23 +57,29 @@ void create_bar() {
                      &render_color, &xft_color);
 }
 void update_bar() {
-  if (!SHOW_BAR)
+  if (!current_workspace->show_bar) {
+    // if we change the workspace and it's hidden there if we don't unmap it
+    // will still exist in the new work space to not show the bar
+    XUnmapWindow(display, bar_window);
     return;
+  }
+  // if we were in a workspace that has the bar hidden and changed to a
+  // workspace that does we need to remap
+  XMapWindow(display, bar_window);
   int screen_width = DisplayWidth(display, DefaultScreen(display));
 
   XClearWindow(display, bar_window);
 
   // Draw workspace buttons
   for (int i = 0; i < NUM_WORKSPACES; ++i) {
-
     int x = i * BUTTONS_WIDTH;
     // Highlight the current workspace button
-    if (i == current_workspace) {
+    if (i == current_workspace->index) {
       XSetForeground(display, DefaultGC(display, DefaultScreen(display)),
                      0x3399FF); // Light blue background
       XFillRectangle(display, bar_window,
                      DefaultGC(display, DefaultScreen(display)), x, 0,
-                     BUTTONS_WIDTH, BAR_HEIGHT);
+                     BUTTONS_WIDTH, current_workspace->bar_height);
     }
     std::string button_label = workspaces_names[i];
     draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color,
@@ -83,7 +90,6 @@ void update_bar() {
                               get_utf8_string_width(display, xft_font, status),
                               15, XDefaultScreen(display));
 }
-
 
 // Get the index of the focused window
 int get_focused_window_index() {
@@ -196,7 +202,10 @@ int main() {
   // Capture key presses for the mod key (e.g., Mod4Mask) with any key
 
   grab_keys();
-  (SHOW_BAR) ? create_bar() : (void)0;
+  for (int i = 0; i < NUM_WORKSPACES; ++i) { // setting the workspace index
+    workspaces[i].index = i;
+  }
+  create_bar();
   update_bar();
   run();
 
@@ -240,16 +249,16 @@ void tile_windows() {
       continue;
     }
 
-    if (c->window ==
-        workspaces[current_workspace].master) { // First window is the master
+    if (c->window == current_workspace->master) { // First window is the master
       // Master window positioning with border
       XMoveResizeWindow(
           display, c->window, GAP_SIZE,
-          BAR_HEIGHT + GAP_SIZE, // Position with gaps and bar height
+          current_workspace->bar_height +
+              GAP_SIZE, // Position with gaps and bar height
           master_width -
               2 * (GAP_SIZE +
                    BORDER_WIDTH), // Width adjusted for border and gaps
-          screen_height - BAR_HEIGHT -
+          screen_height - current_workspace->bar_height -
               2 * (GAP_SIZE +
                    BORDER_WIDTH) // Height adjusted for bar, border, and gaps
       );
@@ -257,12 +266,12 @@ void tile_windows() {
       // Stack windows positioning with border
       int stack_width =
           screen_width - master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
-      int stack_height =
-          (screen_height - BAR_HEIGHT - GAP_SIZE - 2 * BORDER_WIDTH) /
-          (num_tiled_clients - 1);
+      int stack_height = (screen_height - current_workspace->bar_height -
+                          GAP_SIZE - 2 * BORDER_WIDTH) /
+                         (num_tiled_clients - 1);
       int x = master_width + GAP_SIZE;
-      int y =
-          BAR_HEIGHT + GAP_SIZE + (tiled_index - 1) * (stack_height + GAP_SIZE);
+      int y = current_workspace->bar_height + GAP_SIZE +
+              (tiled_index - 1) * (stack_height + GAP_SIZE);
 
       XMoveResizeWindow(display, c->window, x, y, // Position with gaps
                         stack_width,              // Width adjusted for border
@@ -271,7 +280,8 @@ void tile_windows() {
       ++tiled_index; // Only increment for non-floating windows
     }
 
-    XLowerWindow(display, c->window); // Lower windows to avoid overlap
+    XLowerWindow(display,
+                 c->window); // Lower windows to avoid overlap with floaters
     XSetWindowBorderWidth(display, c->window, BORDER_WIDTH); // Set border width
   }
 }
@@ -281,11 +291,10 @@ void one_window() {
     int screen_width = DisplayWidth(display, DefaultScreen(display));
     int screen_height = DisplayHeight(display, DefaultScreen(display));
 
-    int height = screen_height - BAR_HEIGHT;
+    int height = screen_height - current_workspace->bar_height;
 
     // Move and resize the window to fit within the calculated region
-    XMoveResizeWindow(display, clients->front().window, 0, BAR_HEIGHT,
-                      screen_width, height);
+    XMoveResizeWindow(display, clients->front().window, 0,
+                      current_workspace->bar_height, screen_width, height);
   }
 }
-
