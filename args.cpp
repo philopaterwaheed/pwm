@@ -2,6 +2,7 @@
 // args.cpp functions used in shortcuts
 #include "config.h"
 #include "main.h"
+#include <X11/Xlib.h>
 
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
@@ -104,21 +105,28 @@ void swap_window(const Arg *arg) {
 }
 void kill_focused_window(const Arg *arg) {
   (void)arg;
+
   if (focused_window != None) {
+    // Remove the focused window from the client list
     clients->erase(std::remove_if(clients->begin(), clients->end(),
                                   [](const Client &c) {
                                     return c.window == focused_window;
                                   }),
                    clients->end());
-    XKillClient(display, focused_window);
+
+    XUnmapWindow(display, focused_window);
+    clientmsg(focused_window, XInternAtom(display, "WM_DELETE_WINDOW", False),
+              CurrentTime, 2, 0, 0, 0);
+
+    // Update master window if needed
     if (focused_window == current_workspace->master) {
       current_workspace->master = None;
-      if (clients->size() > 0) {
+      if (!clients->empty()) {
         current_workspace->master = (*clients)[0].window;
       }
     }
-    focused_window = None; // Reset focused window
-                           //
+
+    focused_window = None;
     tile_windows();
   }
 }
@@ -195,7 +203,12 @@ void toggle_floating(const Arg *arg) {
   if (client) {
     // Toggle the floating status of the focused window
     client->floating = !client->floating;
-
+    if (client->window == current_workspace->master) {
+      current_workspace->master = None;
+      if (clients->size() > 0) {
+        current_workspace->master = (*clients)[0].window;
+      }
+    }
     if (client->floating) {
       // Get the current window's geometry before making it float
       XWindowAttributes wa;
@@ -252,26 +265,7 @@ void toggle_fullscreen(const Arg *arg) {
     return;
 
   if (!client->is_fullscreen) {
-    // Save the original position and size
-    XWindowAttributes wa;
-    XGetWindowAttributes(display, client->window, &wa);
-    client->x = wa.x;
-    client->y = wa.y;
-    client->width = wa.width;
-    client->height = wa.height;
-
-    // Go full-screen (resize to cover the entire screen)
-    XMoveResizeWindow(display, client->window, 0, 0,
-                      DisplayWidth(display, DefaultScreen(display)),
-                      DisplayHeight(display, DefaultScreen(display)));
-
-    // Remove window borders if needed
-    XSetWindowBorderWidth(display, client->window, 0);
-
-    // Raise the window to the top
-    XRaiseWindow(display, client->window);
-
-    client->is_fullscreen = true;
+    make_fullscreen(client);
   } else {
     // Exit full-screen and restore the original size and position
     XMoveResizeWindow(display, client->window, client->x, client->y,
@@ -309,4 +303,53 @@ void exit_pwm(const Arg *arg) {
   XCloseDisplay(display);
   cleanup();
   exit(0);
+}
+int sendevent(Window window, Atom proto) {
+  XEvent ev;
+  Atom wm_protocols = XInternAtom(display, "WM_PROTOCOLS", True);
+  Atom *protocols;
+  int n;
+  int exists = 0;
+
+  if (XGetWMProtocols(display, window, &protocols, &n)) {
+    for (int i = 0; i < n; ++i) {
+      if (protocols[i] == proto) {
+        exists = 1;
+        break;
+      }
+    }
+    XFree(protocols);
+  }
+
+  if (exists) {
+    ev.type = ClientMessage;
+    ev.xclient.window = window;
+    ev.xclient.message_type = wm_protocols;
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = proto;
+    ev.xclient.data.l[1] = CurrentTime;
+    XSendEvent(display, window, False, NoEventMask, &ev);
+  }
+
+  return exists;
+}
+static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
+                      unsigned long d2, unsigned long d3, unsigned long d4) {
+  XEvent ev;
+  long mask = SubstructureRedirectMask | SubstructureNotifyMask;
+
+  ev.xclient.type = ClientMessage;
+  ev.xclient.serial = 0;
+  ev.xclient.send_event = True;
+  ev.xclient.message_type = atom;
+  ev.xclient.window = win;
+  ev.xclient.format = 32;
+  ev.xclient.data.l[0] = d0;
+  ev.xclient.data.l[1] = d1;
+  ev.xclient.data.l[2] = d2;
+  ev.xclient.data.l[3] = d3;
+  ev.xclient.data.l[4] = d4;
+  if (!XSendEvent(display, root, False, mask, &ev)) {
+    errx(1, "could not send event");
+  }
 }

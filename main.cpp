@@ -214,15 +214,18 @@ int main() {
 }
 void tile_windows() {
   unsigned int num_tiled_clients = 0;
-  std::vector<Client> fullscrren_clients;
-  // First, count the number of non-floating (tiled) clients
   if (clients->size() == 1) {
     one_window();
     return;
   }
-  for (const auto &client : *clients) {
+  std::vector<Client *> fullscreen_clients;
+  // First, count the number of non-floating (tiled) clients and store the
+  // floating / full screen them
+  for ( auto &client : *clients) {
     if (!client.floating) {
       ++num_tiled_clients;
+    } else if (client.is_fullscreen) {
+      fullscreen_clients.push_back(&client);
     }
   }
 
@@ -243,11 +246,11 @@ void tile_windows() {
   for (unsigned int i = 0; i < clients->size(); ++i) {
     Client *c = &(*clients)[i];
     if (c->floating) {
-      // Skip floating windows and store their indices for later raising
+      // Skip floating windows
       continue;
     }
     if (c->is_fullscreen) {
-      // Skip floating windows and store their indices for later raising
+      // Skip fullscrren windows
       continue;
     }
 
@@ -286,6 +289,11 @@ void tile_windows() {
                  c->window); // Lower windows to avoid overlap with floaters
     XSetWindowBorderWidth(display, c->window, BORDER_WIDTH); // Set border width
   }
+  for (auto &client :
+       fullscreen_clients) { // the usser won't be able to make more than one fullscreen
+                     // window in the tilled mood anyways
+    make_fullscreen(client);
+  }
 }
 
 void one_window() {
@@ -300,4 +308,26 @@ void one_window() {
     XMoveResizeWindow(display, clients->front().window, 0,
                       current_workspace->bar_height, screen_width, height);
   }
+}
+void make_fullscreen(Client *client) {
+  // Save the original position and size
+  XWindowAttributes wa;
+  XGetWindowAttributes(display, client->window, &wa);
+  client->x = wa.x;
+  client->y = wa.y;
+  client->width = wa.width;
+  client->height = wa.height;
+
+  // Go full-screen (resize to cover the entire screen)
+  XMoveResizeWindow(display, client->window, 0, 0,
+                    DisplayWidth(display, DefaultScreen(display)),
+                    DisplayHeight(display, DefaultScreen(display)));
+
+  // Remove window borders if needed
+  XSetWindowBorderWidth(display, client->window, 0);
+
+  // Raise the window to the top
+  XRaiseWindow(display, client->window);
+
+  client->is_fullscreen = true;
 }
