@@ -51,11 +51,6 @@ struct Layout {
   std ::string name;
   void (*arrange)();
 };
-struct Workspace {
-  std::vector<Client> clients = {};
-    Window master = None;
-  Layout layout;
-};
 /* union Button { */
 /*   std::string name; */
 /*   unsigned int id; */

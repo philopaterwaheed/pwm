@@ -1,7 +1,7 @@
-//for functions that take Arg as argument, the Arg struct is defined in args.cpp
-//functions used in shortcuts 
-#include "main.h"
+// for functions that take Arg as argument, the Arg struct is defined in
+// args.cpp functions used in shortcuts
 #include "config.h"
+#include "main.h"
 
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
@@ -9,8 +9,7 @@ extern Window root; // the root window top level window all other windows are
 extern Window focused_window, bar_window;
 extern std::vector<Workspace> workspaces;
 
-extern short current_workspace;
-extern int bar_hight_place_holder;
+extern Workspace *current_workspace;
 
 extern std::vector<Client> *clients;
 void resize_focused_window_y(const Arg *arg) {
@@ -105,11 +104,10 @@ void kill_focused_window(const Arg *arg) {
                                   }),
                    clients->end());
     XKillClient(display, focused_window);
-    if (focused_window == workspaces[current_workspace].master) {
-      workspaces[current_workspace].master = None;
-      if (workspaces[current_workspace].clients.size() > 0) {
-        workspaces[current_workspace].master =
-            workspaces[current_workspace].clients[0].window;
+    if (focused_window == current_workspace->master) {
+      current_workspace->master = None;
+      if (clients->size() > 0) {
+        current_workspace->master = (*clients)[0].window;
       }
     }
     focused_window = None; // Reset focused window
@@ -119,43 +117,43 @@ void kill_focused_window(const Arg *arg) {
 }
 void set_master(const Arg *arg) {
   if (focused_window != None) {
-    workspaces[current_workspace].master = focused_window;
+    current_workspace->master = focused_window;
     tile_windows();
     warp_pointer_to_window(&focused_window);
   }
 }
 void switch_workspace(const Arg *arg) {
   int new_workspace = arg->i - 1;
-  if (new_workspace == current_workspace || new_workspace > NUM_WORKSPACES ||
-      new_workspace < 0)
+  if (new_workspace == current_workspace->index ||
+      new_workspace > NUM_WORKSPACES || new_workspace < 0)
     return;
 
   // Unmap windows from the current workspace
-  for (auto &client : workspaces[current_workspace].clients) {
+  for (auto &client : *clients) {
     XUnmapWindow(display, client.window);
   }
 
-  current_workspace = new_workspace;
+  current_workspace = &workspaces[new_workspace];
 
   // Map windows from the new workspace
-  for (auto &client : workspaces[current_workspace].clients) {
+  for (auto &client : current_workspace->clients) {
     XMapWindow(display, client.window);
   }
 
-  clients = &workspaces[current_workspace].clients;
+  clients = &current_workspace->clients;
   // Re-tile the windows in the new workspace
   tile_windows();
   update_bar();
 }
 void move_window_to_workspace(const Arg *arg) {
   int target_workspace = arg->i - 1;
-  if (focused_window == None || target_workspace == current_workspace ||
+  if (focused_window == None || target_workspace == current_workspace->index ||
       target_workspace < 0 || target_workspace > NUM_WORKSPACES) {
     return; // No window to move or target workspace is the same as current
   }
 
   // Remove window from the current workspace
-  auto &current_clients = workspaces[current_workspace].clients;
+  auto &current_clients = current_workspace->clients;
   auto it = std::remove_if(
       current_clients.begin(), current_clients.end(),
       [=](Client &client) { return client.window == focused_window; });
@@ -213,9 +211,10 @@ void toggle_floating(const Arg *arg) {
   }
 }
 void toggle_bar(const Arg *arg) {
-  SHOW_BAR = !SHOW_BAR;
-  std::swap(bar_hight_place_holder, BAR_HEIGHT);
-  if (SHOW_BAR) {
+  current_workspace->show_bar = !current_workspace->show_bar;
+  /* std::swap(bar_height_place_holder, bar_hight); */
+  if (current_workspace->show_bar) {
+    std::swap(current_workspace->bar_height, current_workspace->bar_height_place_holder);
     XMapWindow(display, bar_window);
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |
@@ -223,6 +222,7 @@ void toggle_bar(const Arg *arg) {
                      PropertyChangeMask); // resubscribe
     update_bar();
   } else {
+    std::swap(current_workspace->bar_height, current_workspace->bar_height_place_holder);
     XUnmapWindow(display, bar_window);
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |

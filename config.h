@@ -8,16 +8,28 @@
 #define MOD Mod4Mask    // Usually the Windows key
 #define SHIFT ShiftMask // Usually the shift key
 
-static bool SHOW_BAR = true; // Whether to show the bar or not
-static std::string BAR_FONT = "NotoMono Nerd Font:5";
-static int BORDER_WIDTH = 1; // Width of the window border in pixels
-static int  BAR_HEIGHT = 30;   // Height of the bar in pixels
+// all about the bar
+static bool SHOW_BAR = false; // Whether to show the bar or not
+static std::string BAR_FONT =
+    "NotoMono Nerd Font:5";    // future fix the size doesn't work
+static int BORDER_WIDTH = 1;   // Width of the window border in pixels
+static int BAR_HEIGHT = 30;    // Height of the bar in pixels
+static int BUTTONS_WIDTH = 30; // Width of the buttons in pixels
+struct Workspace {
+  short index; // set to one for the first workspace
+  bool show_bar = SHOW_BAR;
+  int bar_height = (SHOW_BAR) ? BAR_HEIGHT : 0,
+      bar_height_place_holder = (SHOW_BAR) ? 0 : BAR_HEIGHT;
+  std::vector<Client> clients = {};
+  Window master = None;
+  Layout layout;
+};
+///
 static unsigned long BORDER_COLOR =
     0xd3d3d3; // gray color for borders (hex value)
 static unsigned long FOCUSED_BORDER_COLOR =
-    0x000000;                  // black color for focused window
-static int GAP_SIZE = 2;       // Size of the gap around windows in pixels
-static int BUTTONS_WIDTH = 30; // Width of the buttons in pixels
+    0x000000;            // black color for focused window
+static int GAP_SIZE = 2; // Size of the gap around windows in pixels
 
 // all about workspaces
 #define NUM_WORKSPACES 5 // Number of workspaces
