@@ -89,7 +89,14 @@ void swap_window(const Arg *arg) {
   index2 = index2 < 0 ? clients->size() - 1 : index2;
   index2 = index2 >= clients->size() ? 0 : index2;
   if (index1 < clients->size() && index2 < clients->size()) {
-    std::swap(clients[index1], clients[index2]);
+    // if one of them is the master and we didn't ccheck the master will not
+    // change postions
+    if ((*clients)[index2].window == current_workspace->master) {
+      current_workspace->master = (*clients)[index1].window;
+    } else if ((*clients)[index1].window == current_workspace->master)
+      current_workspace->master = (*clients)[index2].window;
+
+    std::swap((*clients)[index1], (*clients)[index2]);
     /* warp_pointer_to_window(focused_window); */
     tile_windows(); // Rearrange windows after swapping
     warp_pointer_to_window(&(*clients)[index2].window);
@@ -169,6 +176,13 @@ void move_window_to_workspace(const Arg *arg) {
       {focused_window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
        static_cast<unsigned int>(wa.height), false});
   XUnmapWindow(display, focused_window);
+  if (focused_window == current_workspace->master) {
+    current_workspace->master = None;
+    if (current_clients.size() > 0) {
+      current_workspace->master = current_clients[0].window;
+    }
+  }
+  focused_window = None;
   tile_windows();
 }
 void toggle_floating(const Arg *arg) {
@@ -214,7 +228,8 @@ void toggle_bar(const Arg *arg) {
   current_workspace->show_bar = !current_workspace->show_bar;
   /* std::swap(bar_height_place_holder, bar_hight); */
   if (current_workspace->show_bar) {
-    std::swap(current_workspace->bar_height, current_workspace->bar_height_place_holder);
+    std::swap(current_workspace->bar_height,
+              current_workspace->bar_height_place_holder);
     XMapWindow(display, bar_window);
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |
@@ -222,7 +237,8 @@ void toggle_bar(const Arg *arg) {
                      PropertyChangeMask); // resubscribe
     update_bar();
   } else {
-    std::swap(current_workspace->bar_height, current_workspace->bar_height_place_holder);
+    std::swap(current_workspace->bar_height,
+              current_workspace->bar_height_place_holder);
     XUnmapWindow(display, bar_window);
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |
