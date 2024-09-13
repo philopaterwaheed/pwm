@@ -1,16 +1,18 @@
 // for event handler funtions
 #include "config.h"
 #include "main.h"
+#include <X11/Xlib.h>
 
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
                     // children of it and covers all the screen
-extern Window focused_window, bar_window;
-extern std::vector<Workspace> workspaces;
-
+extern Window focused_window;
+extern Monitor *current_monitor;
+extern std::vector<Monitor> monitors; // List of monitors
+extern std::vector<Workspace> *workspaces;
 extern Workspace *current_workspace;
-
 extern std::vector<Client> *clients;
+extern std::string status;
 void handle_button_press_event(XEvent *e) {
   int x = e->xbutton.x;
 
@@ -59,9 +61,9 @@ void handle_map_request(XEvent *e) {
   XSetWindowBorderWidth(display, ev->window, BORDER_WIDTH);
   // Set initial border color (unfocused)
   XSetWindowBorder(display, ev->window, BORDER_COLOR);
-  clients->push_back({ev->window, wa.x, wa.y,
-                      static_cast<unsigned int>(wa.width),
-                      static_cast<unsigned int>(wa.height)});
+  Client client = {ev->window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
+                   static_cast<unsigned int>(wa.height)};
+  clients->push_back(client);
   current_workspace->master = clients->back().window;
   tile_windows();
 }
@@ -90,4 +92,23 @@ void handle_key_press(XEvent *e) {
       shortcut.func(&(shortcut.arg));
   }
   restack_windows();
+}
+void handle_motion_notify(XEvent *e) {
+
+  Monitor *m;
+  XMotionEvent *ev = &e->xmotion;
+
+  if (ev->window != root)
+    return;
+  int mouse_x = ev->x_root;
+  int mouse_y = ev->y_root;
+
+  // Find the monitor under the mouse
+  Monitor *monitor = find_monitor_by_coordinates(mouse_x, mouse_y);
+
+  // If the monitor has changed, update the focus
+  if (monitor && monitor != current_monitor) {
+    XClearWindow(display, current_monitor->bar);
+    focus_monitor(monitor);
+  }
 }

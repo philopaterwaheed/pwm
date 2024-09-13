@@ -11,6 +11,7 @@
 #include <X11/X.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
+#include <X11/extensions/Xinerama.h>
 #include <X11/Xproto.h>
 #include <cstdlib>
 #include <fontconfig/fontconfig.h>
@@ -24,6 +25,7 @@
            Mod4Mask | Mod5Mask))
 
 static unsigned int numlockmask = 0;
+struct Monitor;
 
 struct Client {
   Window window; // the window id
@@ -98,13 +100,22 @@ void handle_configure_request(XEvent *e);
 void handle_key_press(XEvent *e);
 void handle_key_press(XEvent *e) ;
 void handle_button_press_event(XEvent *e) ;
+void handle_motion_notify(XEvent *e);
 // font functions
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
-                                 int x, int y, int screen);
+                                 int x, int y, int screen, int monitor_width) ;
 int get_utf8_string_width(Display *display, XftFont *font,
                           const std::string &text) ;
 XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) ;
 int sendevent(Window window, Atom proto) ;
 static void
 clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1, unsigned long d2, unsigned long d3, unsigned long d4);
+void detect_monitors() ;
+Monitor* find_monitor_for_window(int x, int y) ;
+void assign_client_to_monitor(Client *client) ;
+Monitor* find_monitor_by_coordinates(int x, int y) ;
+void focus_monitor(Monitor *monitor) ;
+unsigned int find_monitor_index(Monitor *monitor) ;
+void focus_next_monitor(const Arg *arg) ;
+void focus_previous_monitor(const Arg *arg) ;

@@ -7,12 +7,12 @@
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
                     // children of it and covers all the screen
-extern Window focused_window, bar_window;
-extern std::vector<Workspace> workspaces;
-
+extern Window focused_window;
+extern std::vector<Workspace> *workspaces;
 extern Workspace *current_workspace;
-
 extern std::vector<Client> *clients;
+extern std::vector<Monitor> monitors; // List of monitors
+extern Monitor *current_monitor;
 void resize_focused_window_y(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
     XWindowChanges changes;
@@ -148,7 +148,8 @@ void switch_workspace(const Arg *arg) {
     XUnmapWindow(display, client.window);
   }
 
-  current_workspace = &workspaces[new_workspace];
+  current_workspace = &(*workspaces)[new_workspace];
+  current_monitor->at = new_workspace;
 
   // Map windows from the new workspace
   for (auto &client : current_workspace->clients) {
@@ -180,7 +181,7 @@ void move_window_to_workspace(const Arg *arg) {
   XWindowAttributes wa;
   XGetWindowAttributes(display, focused_window, &wa);
 
-  workspaces[target_workspace].clients.push_back(
+  (*workspaces)[target_workspace].clients.push_back(
       {focused_window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
        static_cast<unsigned int>(wa.height), false});
   XUnmapWindow(display, focused_window);
@@ -238,24 +239,32 @@ void toggle_floating(const Arg *arg) {
   }
 }
 void toggle_bar(const Arg *arg) {
+  current_workspace = &(*workspaces)[current_monitor->at];
   current_workspace->show_bar = !current_workspace->show_bar;
   /* std::swap(bar_height_place_holder, bar_hight); */
   if (current_workspace->show_bar) {
     std::swap(current_workspace->bar_height,
               current_workspace->bar_height_place_holder);
-    XMapWindow(display, bar_window);
-    XSelectInput(display, root,
-                 SubstructureRedirectMask | SubstructureNotifyMask |
-                     KeyPressMask | ExposureMask |
-                     PropertyChangeMask); // resubscribe
+    XMapWindow(display, current_monitor->bar);
+  XSelectInput(display, root,
+               SubstructureRedirectMask | SubstructureNotifyMask |
+                   KeyPressMask | ExposureMask | PropertyChangeMask |
+                   MotionNotify | SubstructureRedirectMask |
+                   SubstructureNotifyMask | ButtonPressMask |
+                   PointerMotionMask | EnterWindowMask | LeaveWindowMask |
+                   StructureNotifyMask | PropertyChangeMask);
     update_bar();
   } else {
     std::swap(current_workspace->bar_height,
               current_workspace->bar_height_place_holder);
-    XUnmapWindow(display, bar_window);
-    XSelectInput(display, root,
-                 SubstructureRedirectMask | SubstructureNotifyMask |
-                     KeyPressMask | ExposureMask); // unsubscibe for more speed
+    XUnmapWindow(display, current_monitor->bar);
+  XSelectInput(display, root,
+               SubstructureRedirectMask | SubstructureNotifyMask |
+                   KeyPressMask | ExposureMask | PropertyChangeMask |
+                   MotionNotify | SubstructureRedirectMask |
+                   SubstructureNotifyMask | ButtonPressMask |
+                   PointerMotionMask | EnterWindowMask | LeaveWindowMask |
+                   StructureNotifyMask);
   }
   tile_windows();
 }
@@ -352,4 +361,32 @@ static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
   if (!XSendEvent(display, root, False, mask, &ev)) {
     errx(1, "could not send event");
   }
+}
+void focus_next_monitor(const Arg *arg) {
+  if (monitors.empty())
+    return;
+
+  // Move to the previous monitor
+  unsigned int focused_monitor_index = find_monitor_index(current_monitor);
+  unsigned int new_index = focused_monitor_index + 1;
+  if (focused_monitor_index >= monitors.size()) {
+    new_index = 0;
+  }
+  Monitor *monitor = &monitors[new_index];
+  XWarpPointer(display, None, None, 0, 0, 0, 0, monitor->x, monitor->y);
+}
+
+void focus_previous_monitor(const Arg *arg) {
+  if (monitors.empty())
+    return;
+
+  // Move to the previous monitor
+  unsigned int focused_monitor_index = find_monitor_index(current_monitor);
+  unsigned int new_index = focused_monitor_index - 1;
+  if (focused_monitor_index < 0) {
+    new_index = monitors.size() - 1;
+  }
+  Monitor *monitor = &monitors[new_index];
+  XWarpPointer(display, None, None, 0, 0, 0, 0, monitor->width / 2,
+               monitor->height / 2);
 }

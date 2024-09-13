@@ -6,14 +6,17 @@
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
-Window focused_window = None, bar_window;
+Window focused_window = None;
 XftFont *xft_font;
 XftDraw *xft_draw;
 XftColor xft_color;
 
-std::vector<Workspace> workspaces(NUM_WORKSPACES);
-auto *clients = &workspaces[0].clients;
-auto *current_workspace = &workspaces[0];
+std::vector<Monitor> monitors;      // List of monitors
+Monitor *current_monitor = nullptr; // The monitor in focus
+//
+std::vector<Workspace> *workspaces;
+Workspace *current_workspace;
+std::vector<Client> *clients;
 
 std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
@@ -28,46 +31,49 @@ Client *find_client(Window w) {
   return nullptr;
 }
 
-void create_bar() {
-  int screen_width = DisplayWidth(display, DefaultScreen(display));
-  int screen_height = DisplayHeight(display, DefaultScreen(display));
+void create_bars() {
+  for (auto &monitor : monitors) {
+    int screen_width = current_monitor->width;
+    int screen_height = current_monitor->height;
 
-  // Create the bar window
-  bar_window = XCreateSimpleWindow(display, root, 0, 0, screen_width,
-                                   BAR_HEIGHT, 0, 0, 0x000000);
-  if (SHOW_BAR) { // for if show bar is false in the config
-    XSelectInput(display, bar_window,
-                 ExposureMask | KeyPressMask | ButtonPressMask);
-    XMapWindow(display,
-               bar_window); // we create and don't show for future errors
+    // Create the bar windows for each monitor
+    monitor.bar = XCreateSimpleWindow(display, root, monitor.x, monitor.y,
+                                      screen_width, BAR_HEIGHT, 0, 0, 0x000000);
+    if (SHOW_BAR) { // for if show bar is false in the config
+      XSelectInput(display, monitor.bar,
+                   ExposureMask | KeyPressMask | ButtonPressMask);
+      XMapWindow(display,
+                 monitor.bar); // we create and don't show for future errors
+    }
+    // Load the font using Xft
+    xft_font =
+        XftFontOpenName(display, DefaultScreen(display), BAR_FONT.c_str());
+
+    // Create a drawable for the bar
+    xft_draw = XftDrawCreate(display, monitor.bar,
+                             DefaultVisual(display, DefaultScreen(display)),
+                             DefaultColormap(display, DefaultScreen(display)));
+
+    // Set the color for drawing text (white in this case)
+    XRenderColor render_color = {0xffff, 0xffff, 0xffff, 0xffff}; // White color
+    XftColorAllocValue(display, DefaultVisual(display, DefaultScreen(display)),
+                       DefaultColormap(display, DefaultScreen(display)),
+                       &render_color, &xft_color);
   }
-  // Load the font using Xft
-  xft_font = XftFontOpenName(display, DefaultScreen(display), BAR_FONT.c_str());
-
-  // Create a drawable for the bar
-  xft_draw = XftDrawCreate(display, bar_window,
-                           DefaultVisual(display, DefaultScreen(display)),
-                           DefaultColormap(display, DefaultScreen(display)));
-
-  // Set the color for drawing text (white in this case)
-  XRenderColor render_color = {0xffff, 0xffff, 0xffff, 0xffff}; // White color
-  XftColorAllocValue(display, DefaultVisual(display, DefaultScreen(display)),
-                     DefaultColormap(display, DefaultScreen(display)),
-                     &render_color, &xft_color);
 }
 void update_bar() {
   if (!current_workspace->show_bar) {
     // if we change the workspace and it's hidden there if we don't unmap it
     // will still exist in the new work space to not show the bar
-    XUnmapWindow(display, bar_window);
+    XUnmapWindow(display, current_monitor->bar);
     return;
   }
   // if we were in a workspace that has the bar hidden and changed to a
   // workspace that does we need to remap
-  XMapWindow(display, bar_window);
-  int screen_width = DisplayWidth(display, DefaultScreen(display));
+  XMapWindow(display, current_monitor->bar);
+  int screen_width = current_monitor->width;
 
-  XClearWindow(display, bar_window);
+  XClearWindow(display, current_monitor->bar);
 
   // Draw workspace buttons
   for (int i = 0; i < NUM_WORKSPACES; ++i) {
@@ -76,18 +82,19 @@ void update_bar() {
     if (i == current_workspace->index) {
       XSetForeground(display, DefaultGC(display, DefaultScreen(display)),
                      0x3399FF); // Light blue background
-      XFillRectangle(display, bar_window,
+      XFillRectangle(display, current_monitor->bar,
                      DefaultGC(display, DefaultScreen(display)), x, 0,
                      BUTTONS_WIDTH, current_workspace->bar_height);
     }
     std::string button_label = workspaces_names[i];
-    draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color,
-                                button_label.c_str(), x + 10, 15,
-                                XDefaultScreen(display));
+    draw_text_with_dynamic_font(display, current_monitor->bar, xft_draw,
+                                &xft_color, button_label.c_str(), x + 10, 15,
+                                XDefaultScreen(display),
+                                current_monitor->width);
   }
-  draw_text_with_dynamic_font(display, bar_window, xft_draw, &xft_color, status,
-                              get_utf8_string_width(display, xft_font, status),
-                              15, XDefaultScreen(display));
+  draw_text_with_dynamic_font(display, current_monitor->bar, xft_draw,
+                              &xft_color, status, 500, 15,
+                              XDefaultScreen(display), current_monitor->width);
 }
 
 // Get the index of the focused window
@@ -139,6 +146,9 @@ void run() {
       break;
     case ButtonPress:
       handle_button_press_event(&ev);
+      break;
+    case MotionNotify:
+      handle_motion_notify(&ev);
       break;
     }
   }
@@ -193,18 +203,26 @@ int main() {
   // Subscribe to events on the root window
   XSelectInput(display, root,
                SubstructureRedirectMask | SubstructureNotifyMask |
-                   KeyPressMask | ExposureMask | PropertyChangeMask);
+                   KeyPressMask | ExposureMask | PropertyChangeMask |
+                   MotionNotify | SubstructureRedirectMask |
+                   SubstructureNotifyMask | ButtonPressMask |
+                   PointerMotionMask | EnterWindowMask | LeaveWindowMask |
+                   StructureNotifyMask | PropertyChangeMask);
 
   Cursor cursor =                    // not for future evry action needs a shape
       XCreateFontCursor(display, 2); // Set the cursor for the window
   XDefineCursor(display, root, cursor);
   // Capture key presses for the mod key (e.g., Mod4Mask) with any key
 
+  detect_monitors();
   grab_keys();
-  for (int i = 0; i < NUM_WORKSPACES; ++i) { // setting the workspace index
-    workspaces[i].index = i;
+  for (auto &monitor : monitors) {
+    for (int i = 0; i < NUM_WORKSPACES; ++i) { // setting the workspace index
+      monitor.workspaces[i].index = i;
+    }
+    monitor.current_workspace = &monitor.workspaces[0];
   }
-  create_bar();
+  create_bars();
   update_bar();
   run();
 
@@ -221,7 +239,7 @@ void tile_windows() {
   std::vector<Client *> fullscreen_clients;
   // First, count the number of non-floating (tiled) clients and store the
   // floating / full screen them
-  for ( auto &client : *clients) {
+  for (auto &client : *clients) {
     if (!client.floating) {
       ++num_tiled_clients;
     } else if (client.is_fullscreen) {
@@ -236,8 +254,11 @@ void tile_windows() {
   if (current_workspace->master == None) {
     current_workspace->master = clients->front().window;
   }
-  int screen_width = DisplayWidth(display, DefaultScreen(display));
-  int screen_height = DisplayHeight(display, DefaultScreen(display));
+  int screen_width =
+      current_monitor->width; // DisplayWidth(display, DefaultScreen(display));
+  int screen_height =
+      current_monitor
+          ->height; // DisplayHeight(display, DefaultScreen(display));
 
   // Calculate master width (60% of screen width)
   int master_width = screen_width * 0.6;
@@ -257,8 +278,8 @@ void tile_windows() {
     if (c->window == current_workspace->master) { // First window is the master
       // Master window positioning with border
       XMoveResizeWindow(
-          display, c->window, GAP_SIZE,
-          current_workspace->bar_height +
+          display, c->window, current_monitor->x + GAP_SIZE,
+          current_monitor->y + current_workspace->bar_height +
               GAP_SIZE, // Position with gaps and bar height
           master_width -
               2 * (GAP_SIZE +
@@ -274,8 +295,8 @@ void tile_windows() {
       int stack_height = (screen_height - current_workspace->bar_height -
                           GAP_SIZE - 2 * BORDER_WIDTH) /
                          (num_tiled_clients - 1);
-      int x = master_width + GAP_SIZE;
-      int y = current_workspace->bar_height + GAP_SIZE +
+      int x = current_monitor->x + master_width + GAP_SIZE;
+      int y = current_workspace->bar_height + current_monitor->y + GAP_SIZE +
               (tiled_index - 1) * (stack_height + GAP_SIZE);
 
       XMoveResizeWindow(display, c->window, x, y, // Position with gaps
@@ -289,17 +310,23 @@ void tile_windows() {
                  c->window); // Lower windows to avoid overlap with floaters
     XSetWindowBorderWidth(display, c->window, BORDER_WIDTH); // Set border width
   }
-  for (auto &client :
-       fullscreen_clients) { // the usser won't be able to make more than one fullscreen
-                     // window in the tilled mood anyways
+  for (auto &client : fullscreen_clients) { // the usser won't be able to make
+                                            // more than one fullscreen
+                                            // window in the tilled mood anyways
     make_fullscreen(client);
   }
 }
 
 void one_window() {
   if (clients->size() == 1) {
-    int screen_width = DisplayWidth(display, DefaultScreen(display));
-    int screen_height = DisplayHeight(display, DefaultScreen(display));
+    int screen_width =
+        current_monitor->x +
+        current_monitor
+            ->width; // DisplayWidth(display, DefaultScreen(display));
+    int screen_height =
+        current_monitor->y +
+        current_monitor
+            ->height; // DisplayHeight(display, DefaultScreen(display));
 
     int height = screen_height - current_workspace->bar_height;
 
@@ -330,4 +357,85 @@ void make_fullscreen(Client *client) {
   XRaiseWindow(display, client->window);
 
   client->is_fullscreen = true;
+}
+void detect_monitors() {
+  if (!XineramaIsActive(display)) {
+    fprintf(stderr, "Xinerama is not active.\n");
+    exit(1);
+  }
+
+  int num_monitors;
+  XineramaScreenInfo *screens = XineramaQueryScreens(display, &num_monitors);
+
+  for (int i = 0; i < num_monitors; i++) {
+    Monitor monitor;
+    monitor.screen = screens[i].screen_number;
+    monitor.x = screens[i].x_org;
+    monitor.y = screens[i].y_org;
+    monitor.width = screens[i].width;
+    monitor.height = screens[i].height;
+    monitors.push_back(monitor);
+  }
+
+  XFree(screens);
+
+  if (monitors.size() > 0) {
+    current_monitor = &monitors[0]; // Set first monitor as the current one
+    workspaces = &current_monitor->workspaces;
+    current_workspace = &(*workspaces)[0];
+    clients = &(*workspaces)[0].clients;
+  }
+}
+Monitor *find_monitor_for_window(int x, int y) {
+  for (auto &monitor : monitors) {
+    if (x >= monitor.x && x < monitor.x + monitor.width && y >= monitor.y &&
+        y < monitor.y + monitor.height) {
+      return &monitor;
+    }
+  }
+  return nullptr; // Default to no monitor
+}
+
+void assign_client_to_monitor(Client *client) {
+  XWindowAttributes wa;
+  XGetWindowAttributes(display, client->window, &wa);
+
+  Monitor *monitor = find_monitor_for_window(wa.x, wa.y);
+  if (!monitor->current_workspace) {
+    monitor->current_workspace = &(*workspaces)[0];
+  }
+  if (monitor) {
+    monitor->current_workspace->clients.push_back(*client);
+  }
+}
+Monitor *find_monitor_by_coordinates(int x, int y) {
+  for (auto &monitor : monitors) {
+    if (x >= monitor.x && x < monitor.x + monitor.width && y >= monitor.y &&
+        y < monitor.y + monitor.height) {
+      return &monitor;
+    }
+  }
+  return nullptr;
+}
+void focus_monitor(Monitor *monitor) {
+  if (!monitor)
+    return;
+
+  // Focus the monitor's active workspace
+  current_monitor = monitor;
+  workspaces = &(current_monitor->workspaces);
+  current_workspace =
+      &current_monitor
+           ->workspaces[current_monitor->at]; // really don't know wht i need
+                                              // this but it's what it is
+  clients = &current_workspace->clients;
+  focused_window = None;
+}
+unsigned int find_monitor_index(Monitor *monitor) {
+  for (unsigned int i = 0; i < monitors.size(); ++i) {
+    if (&monitors[i] == monitor) {
+      return i;
+    }
+  }
+  return -1; // Not found
 }
