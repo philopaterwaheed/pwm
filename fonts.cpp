@@ -7,14 +7,16 @@ extern Window focused_window, master_window, bar_window;
 extern XftFont *xft_font;
 extern XftDraw *xft_draw;
 extern XftColor xft_color;
-extern std::vector<Client> *clients;
 std::unordered_map<FcChar32, XftFont *> font_cache;
 
 // Function to render text, choosing appropriate font dynamically with caching
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
-                                 int x, int y, int screen) {
+                                 int x, int y, int screen, int monitor_width) {
   int x_offset = x;
+
+  // Ensure draw context is correct for the specified window
+  XftDraw* window_draw = XftDrawCreate(display, window, DefaultVisual(display, screen), DefaultColormap(display, screen));
 
   for (size_t i = 0; i < text.size();) {
     // Decode the UTF-8 character
@@ -30,18 +32,27 @@ void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
       break;
     }
 
-    // Render the character using the selected (or cached) font
-    XftDrawStringUtf8(draw, color, font, x_offset, y, (FcChar8 *)&text[i],
-                      bytes);
+    // Get text extents
     XGlyphInfo extents;
     XftTextExtentsUtf8(display, font, (FcChar8 *)&text[i], bytes, &extents);
+
+    // Ensure text does not overflow beyond the monitor width
+    if (x_offset + extents.xOff > monitor_width) {
+      // Handle text overflow: here we just break
+      break; // Or implement wrapping/new line logic
+    }
+
+    // Render the character
+    XftDrawStringUtf8(window_draw, color, font, x_offset, y + extents.y, (FcChar8 *)&text[i], bytes);
     x_offset += extents.xOff;
 
     // Move to the next character
     i += bytes;
   }
-}
 
+  // Cleanup: Free resources
+  XftDrawDestroy(window_draw);
+}
 int get_utf8_string_width(Display *display, XftFont *font,
                           const std::string &text) {
   // Convert std::string to XftChar8 array
