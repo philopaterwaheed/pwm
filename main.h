@@ -108,6 +108,7 @@ void handle_button_press_event(XEvent *e);
 void handle_motion_notify(XEvent *e);
 void handle_destroy_notify(XEvent *e) ;
 void handle_destroy_notify(XEvent *e) ;
+void handle_client_message( XEvent *ev) ;
 // font functions
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
