@@ -13,6 +13,7 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Monitor> monitors; // List of monitors
 extern Monitor *current_monitor;
+extern Atom wmDeleteMessage;
 void resize_focused_window_y(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
     XWindowChanges changes;
@@ -212,20 +213,20 @@ void toggle_floating(const Arg *arg) {
     }
     if (client->floating) {
       // Get the current window's geometry before making it float
-      XWindowAttributes wa;
-      XGetWindowAttributes(display, focused_window, &wa);
-      client->x = wa.x;
-      client->y = wa.y;
-      client->width = wa.width;
-      client->height = wa.height;
+      /* XWindowAttributes wa; */
+      /* XGetWindowAttributes(display, focused_window, &wa); */
+      /* client->x = wa.x; */
+      /* client->y = wa.y; */
+      /* client->width = wa.width; */
+      /* client->height = wa.height; */
 
       // Resize and move the window to some default position (e.g., 100, 100)
       // and set borders
       XMoveResizeWindow(display, focused_window, 100, 100,
                         800 - 2 * border_width, 600 - 2 * border_width);
-      XSetWindowBorderWidth(
-          display, focused_window,
-          border_width); // Set border width for floating windows
+      /* XSetWindowBorderWidth( */
+      /*     display, focused_window, */
+      /*     border_width); // Set border width for floating windows */
 
       // Ensure the floating window is raised above other windows
       XRaiseWindow(display, focused_window);
@@ -246,25 +247,25 @@ void toggle_bar(const Arg *arg) {
     std::swap(current_workspace->bar_height,
               current_workspace->bar_height_place_holder);
     XMapWindow(display, current_monitor->bar);
-  XSelectInput(display, root,
-               SubstructureRedirectMask | SubstructureNotifyMask |
-                   KeyPressMask | ExposureMask | PropertyChangeMask |
-                   MotionNotify | SubstructureRedirectMask |
-                   SubstructureNotifyMask | ButtonPressMask |
-                   PointerMotionMask | EnterWindowMask | LeaveWindowMask |
-                   StructureNotifyMask | PropertyChangeMask);
+    XSelectInput(display, root,
+                 SubstructureRedirectMask | SubstructureNotifyMask |
+                     KeyPressMask | ExposureMask | PropertyChangeMask |
+                     MotionNotify | SubstructureRedirectMask |
+                     SubstructureNotifyMask | ButtonPressMask |
+                     PointerMotionMask | EnterWindowMask | LeaveWindowMask |
+                     StructureNotifyMask | PropertyChangeMask);
     update_bar();
   } else {
     std::swap(current_workspace->bar_height,
               current_workspace->bar_height_place_holder);
     XUnmapWindow(display, current_monitor->bar);
-  XSelectInput(display, root,
-               SubstructureRedirectMask | SubstructureNotifyMask |
-                   KeyPressMask | ExposureMask | PropertyChangeMask |
-                   MotionNotify | SubstructureRedirectMask |
-                   SubstructureNotifyMask | ButtonPressMask |
-                   PointerMotionMask | EnterWindowMask | LeaveWindowMask |
-                   StructureNotifyMask);
+    XSelectInput(display, root,
+                 SubstructureRedirectMask | SubstructureNotifyMask |
+                     KeyPressMask | ExposureMask | PropertyChangeMask |
+                     MotionNotify | SubstructureRedirectMask |
+                     SubstructureNotifyMask | ButtonPressMask |
+                     PointerMotionMask | EnterWindowMask | LeaveWindowMask |
+                     StructureNotifyMask);
   }
   arrange_windows();
 }
@@ -274,16 +275,16 @@ void toggle_fullscreen(const Arg *arg) {
     return;
 
   if (!client->fullscreen) {
-    client->fullscreen = true; 
-    make_fullscreen(client , current_monitor->width , current_monitor->height );
+    client->fullscreen = true;
+    make_fullscreen(client, current_monitor->width, current_monitor->height);
   } else {
     // Exit full-screen and restore the original size and position
     XMoveResizeWindow(display, client->window, client->x, client->y,
                       client->width, client->height);
 
     // Restore the window border
-    XSetWindowBorderWidth(display, client->window,
-                          2); // Adjust to your border size
+    /* XSetWindowBorderWidth(display, client->window, */
+    /*                       2); // Adjust to your border size */
 
     client->fullscreen = false;
   }
@@ -362,13 +363,15 @@ static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
   if (!XSendEvent(display, root, False, mask, &ev)) {
     errx(1, "could not send event");
   }
+  // from https://github.com/phillbush/shod
+  // thanks the only message that helped me in killing windows
 }
 void change_layout(const Arg *arg) {
-    if (arg->i < 0 || arg->i >= NUM_LAYOUTS)
-    	return;
-    current_workspace->layout = arg->i;
-    arrange_windows();
-    update_bar();
+  if (arg->i < 0 || arg->i >= NUM_LAYOUTS)
+    return;
+  current_workspace->layout = arg->i;
+  arrange_windows();
+  update_bar();
 }
 void focus_next_monitor(const Arg *arg) {
   if (monitors.empty())

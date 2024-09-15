@@ -4,6 +4,7 @@
 #include <X11/X.h>
 #include <X11/Xlib.h>
 #include <cmath>
+#include <cstdlib>
 #include <utility>
 
 Display *display; // the connection to the X server
@@ -24,6 +25,7 @@ std::vector<Client> *clients;
 std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
 
+Atom wmDeleteMessage;
 // Find a client by its window id and return a pointer to it
 Client *find_client(Window w) {
   for (auto &client : *clients) {
@@ -125,8 +127,13 @@ void warp_pointer_to_window(Window *win) {
 void restack_windows() {}
 
 void run() {
-  XEvent ev;
-  while (!XNextEvent(display, &ev)) {
+  while (true) {
+    XEvent ev;
+    XNextEvent(display, &ev);
+    std::string log = "echo 'got event";
+    log += std::to_string(ev.type);
+    log += "' >> /tmp/log.txt";
+    system(log.c_str());
     switch (ev.type) {
     case MapRequest:
       // This event is sent when a window want to be mapped
@@ -159,8 +166,11 @@ void run() {
       handle_motion_notify(&ev);
       break;
     case DestroyNotify:
-       handle_destroy_notify(&ev);
-       break;
+      handle_destroy_notify(&ev);
+      break;
+    case ClientMessage:
+      handle_client_message(&ev);
+      break;
     }
   }
 }
@@ -211,6 +221,7 @@ int main() {
 
   root = DefaultRootWindow(display);
 
+  wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
   // Subscribe to events on the root window
   XSelectInput(display, root,
                SubstructureRedirectMask | SubstructureNotifyMask |
@@ -243,16 +254,36 @@ int main() {
 }
 void tile_windows(std::vector<Client *> *clients, int master_width,
                   int screen_height, int screen_width) {
-
+  static int i = 0;
+  std::string log = "echo 'entered tileing";
+  log += std::to_string(clients->size());
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
   unsigned int tiled_index = 1; // To track the position of tiled clients
   int num_tiled_clients = clients->size();
   for (int i = 0; i < clients->size(); ++i) {
     Client *c = (*clients)[i];
 
     if (c->window == current_workspace->master) { // First window is the master
+      log = "echo 'found master";
+      log += std::to_string(clients->size());
+      log += "eteration : " + std::to_string(i);
+      log += "' >> /tmp/log.txt";
+      system(log.c_str());
       // Master window positioning with border
       if (num_tiled_clients == 1) {
+        log = "echo 'making it full screen";
+        log += std::to_string(clients->size());
+        log += "eteration : " + std::to_string(i);
+        log += "' >> /tmp/log.txt";
+        system(log.c_str());
         make_fullscreen(c, screen_width, screen_height, false);
+        log = "echo 'made it full screen";
+        log += std::to_string(clients->size());
+        log += "eteration : " + std::to_string(i);
+        log += "' >> /tmp/log.txt";
+        system(log.c_str());
         break; // we have no more windows
       }
       XMoveResizeWindow(
@@ -267,6 +298,11 @@ void tile_windows(std::vector<Client *> *clients, int master_width,
                    BORDER_WIDTH) // Height adjusted for bar, border, and gaps
       );
     } else {
+      log = "echo 'doing others";
+      log += std::to_string(clients->size());
+      log += "eteration : " + std::to_string(i);
+      log += "' >> /tmp/log.txt";
+      system(log.c_str());
       // Stack windows positioning with border
       int stack_width =
           screen_width - master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
@@ -286,8 +322,9 @@ void tile_windows(std::vector<Client *> *clients, int master_width,
 
     XLowerWindow(display,
                  c->window); // Lower windows to avoid overlap with floaters
-    XSetWindowBorderWidth(display, c->window, BORDER_WIDTH); // Set border width
+    /* XSetWindowBorderWidth(display, c->window, BORDER_WIDTH); // Set border width */
   }
+  i++;
 }
 
 void monocle_windows(std::vector<Client *> *clients, int master_width,
@@ -318,20 +355,31 @@ void grid_windows(std::vector<Client *> *clients, int master_width,
                           current_workspace->bar_height,
                       win_width - 2 * (GAP_SIZE + BORDER_WIDTH),
                       win_height - 2 * (GAP_SIZE + BORDER_WIDTH));
-    XSetWindowBorderWidth(display, client->window,
-                          BORDER_WIDTH); // Set border width
+    /* XSetWindowBorderWidth(display, client->window, */
+                          /* BORDER_WIDTH); // Set border width */
     i++;
   }
 }
 void make_fullscreen(Client *client, int screen_width, int screen_height,
                      bool raise) {
   // Save the original position and size
+  static int i = 0;
+  std::string log = "echo 'entered fullscreen";
+  log += std::to_string(client->window);
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
   XWindowAttributes wa;
-  XGetWindowAttributes(display, client->window, &wa);
-  client->x = wa.x;
-  client->y = wa.y;
-  client->width = wa.width;
-  client->height = wa.height;
+  /* XGetWindowAttributes(display, client->window, &wa); */
+  /* client->x = wa.x; */
+  /* client->y = wa.y; */
+  /* client->width = wa.width; */
+  /* client->height = wa.height; */
+  log = "echo 'got attributes";
+  log += std::to_string(client->window);
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
 
   XMoveResizeWindow(display, client->window, current_monitor->x + GAP_SIZE,
                     current_monitor->y + current_workspace->bar_height +
@@ -339,10 +387,15 @@ void make_fullscreen(Client *client, int screen_width, int screen_height,
                     screen_width - 2 * (GAP_SIZE + BORDER_WIDTH),
                     screen_height - current_workspace->bar_height -
                         2 * (GAP_SIZE + BORDER_WIDTH));
-  XSetWindowBorderWidth(display, client->window, BORDER_WIDTH);
+  /* XSetWindowBorderWidth(display, client->window, BORDER_WIDTH); */
   // Go full-screen (resize to cover the entire screen)
   (raise) ? XRaiseWindow(display, client->window) : 0;
-
+  log = "echo 'finised fullscreen";
+  log += std::to_string(client->window);
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
+  i++;
 }
 void detect_monitors() {
   if (!XineramaIsActive(display)) {
@@ -426,28 +479,50 @@ unsigned int find_monitor_index(Monitor *monitor) {
   return -1; // Not found
 }
 void arrange_windows() {
+  static int i = 0;
   std::vector<Client *> fullscreen_clients;
   std::vector<Client *> arranged_clients;
   // First, count the number of non-floating (arranged) clients and store the
   // them
+  std::string log = "echo 'entered";
+  log += std::to_string(clients->size());
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
+  log = "echo 'got clients";
   for (auto &client : *clients) {
+    XWindowAttributes att;
+    log += std::to_string(client.window) + " ";
     if (!client.floating) {
       arranged_clients.push_back(&client);
 
-    }
-    else if (client.fullscreen) {
+    } else if (client.fullscreen) {
       fullscreen_clients.push_back(&client);
     }
   }
+  log += std::to_string(clients->size());
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
   int num_arranged_clients = arranged_clients.size();
 
   // If there are no arranged_clients clients, we don't need to arrange anything
   if (num_arranged_clients == 0)
     return;
 
+  log = "echo 'before";
+  log += std::to_string(clients->size());
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
   if (current_workspace->master == None) {
-    current_workspace->master = clients->front().window;
+    current_workspace->master = (*clients)[0].window;
   }
+  log = "echo 'seted master";
+  log += std::to_string(clients->size());
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
   int screen_width =
       current_monitor->width; // DisplayWidth(display, DefaultScreen(display));
   int screen_height =
@@ -461,12 +536,23 @@ void arrange_windows() {
   if (!(LAYOUTS[current_workspace->layout].index ==
         1)) // monocle_layout // we already did this we don't need to do it
             // twice
-    for (auto &client :
-         fullscreen_clients) { // the usser won't be able to make
-                               // more than one fullscreen
-                               // window in the any arranged mood anyways
-      make_fullscreen(client, screen_width, screen_height);
-    }
+    log = "echo 'called the layout arrange";
+  log += std::to_string(clients->size());
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
+  for (auto &client :
+       fullscreen_clients) { // the usser won't be able to make
+                             // more than one fullscreen
+                             // window in the any arranged mood anyways
+    make_fullscreen(client, screen_width, screen_height);
+  }
+  log = "echo 'finished arrange";
+  log += std::to_string(clients->size());
+  log += "eteration : " + std::to_string(i);
+  log += "' >> /tmp/log.txt";
+  system(log.c_str());
+  i++;
 }
 void toggle_layout() {
   std::swap(current_workspace->layout,
