@@ -6,8 +6,11 @@
 
 // constatns
 #define MOD Mod4Mask    // Usually the Windows key
+#define ALT Mod1Mask    // Usually the Windows key
 #define SHIFT ShiftMask // Usually the shift key
+#define NUM_LAYOUTS 3
 
+static float master_size= .6;
 // all about the bar
 static bool SHOW_BAR = true; // Whether to show the bar or not
 static std::string BAR_FONT =
@@ -15,6 +18,11 @@ static std::string BAR_FONT =
 static int BORDER_WIDTH = 1;   // Width of the window border in pixels
 static int BAR_HEIGHT = 30;    // Height of the bar in pixels
 static int BUTTONS_WIDTH = 30; // Width of the buttons in pixels
+static Layout LAYOUTS[NUM_LAYOUTS] = {
+    {0,"tiled",  tile_windows},
+    {1,"monocle", monocle_windows},
+    {2,"grid",  grid_windows},
+};
 struct Workspace {
   short index; // set to one for the first workspace
   bool show_bar = SHOW_BAR;
@@ -22,7 +30,8 @@ struct Workspace {
       bar_height_place_holder = (SHOW_BAR) ? 0 : BAR_HEIGHT;
   std::vector<Client> clients = std::vector<Client>(0);
   Window master = None;
-  Layout layout;
+  short layout = 0 , layout_index_place_holder  =1 ;
+  float master_persent = master_size;
 };
 // window
 static unsigned long BORDER_COLOR =
@@ -42,7 +51,7 @@ static const std::string workspaces_names[NUM_WORKSPACES] = {
   }
 struct Monitor {
   short at = 0;
-  int x, y , screen;
+  int x, y, screen;
   unsigned int width, height;
   std::vector<Workspace> workspaces = std::vector<Workspace>(NUM_WORKSPACES);
   Workspace *current_workspace = NULL;
@@ -85,6 +94,9 @@ static std::vector<shortcut> shortcuts = {
     {MOD | SHIFT, XK_j, swap_window, {.i = +1}},
     {MOD | SHIFT, XK_k, swap_window, {.i = -1}},
     {MOD | SHIFT, XK_f, set_master, {0}},
+    {MOD | ALT, XK_space, change_layout, {0}},
+    {MOD | ALT, XK_m, change_layout, {.i = 1}},
+    {MOD | ALT, XK_g, change_layout, {.i = 2}},
     WORKSPACEKEYS(XK_1, 1),
     WORKSPACEKEYS(XK_2, 2),
     WORKSPACEKEYS(XK_3, 3),

@@ -99,7 +99,7 @@ void swap_window(const Arg *arg) {
 
     std::swap((*clients)[index1], (*clients)[index2]);
     /* warp_pointer_to_window(focused_window); */
-    tile_windows(); // Rearrange windows after swapping
+    arrange_windows(); // Rearrange windows after swapping
     warp_pointer_to_window(&(*clients)[index2].window);
   }
 }
@@ -127,13 +127,13 @@ void kill_focused_window(const Arg *arg) {
     }
 
     focused_window = None;
-    tile_windows();
+    arrange_windows();
   }
 }
 void set_master(const Arg *arg) {
   if (focused_window != None) {
     current_workspace->master = focused_window;
-    tile_windows();
+    arrange_windows();
     warp_pointer_to_window(&focused_window);
   }
 }
@@ -157,8 +157,8 @@ void switch_workspace(const Arg *arg) {
   }
 
   clients = &current_workspace->clients;
-  // Re-tile the windows in the new workspace
-  tile_windows();
+  // Re-arrange_windows the windows in the new workspace
+  arrange_windows();
   update_bar();
 }
 void move_window_to_workspace(const Arg *arg) {
@@ -192,7 +192,7 @@ void move_window_to_workspace(const Arg *arg) {
     }
   }
   focused_window = None;
-  tile_windows();
+  arrange_windows();
 }
 void toggle_floating(const Arg *arg) {
   if (focused_window == None)
@@ -232,7 +232,7 @@ void toggle_floating(const Arg *arg) {
     }
 
     // Rearrange windows after toggling floating
-    tile_windows();
+    arrange_windows();
 
     // Optionally warp the mouse pointer to the newly floating window
     warp_pointer_to_window(&client->window);
@@ -266,15 +266,16 @@ void toggle_bar(const Arg *arg) {
                    PointerMotionMask | EnterWindowMask | LeaveWindowMask |
                    StructureNotifyMask);
   }
-  tile_windows();
+  arrange_windows();
 }
 void toggle_fullscreen(const Arg *arg) {
   auto client = find_client(focused_window);
   if (!client)
     return;
 
-  if (!client->is_fullscreen) {
-    make_fullscreen(client);
+  if (!client->fullscreen) {
+    client->fullscreen = true; 
+    make_fullscreen(client , current_monitor->width , current_monitor->height );
   } else {
     // Exit full-screen and restore the original size and position
     XMoveResizeWindow(display, client->window, client->x, client->y,
@@ -284,7 +285,7 @@ void toggle_fullscreen(const Arg *arg) {
     XSetWindowBorderWidth(display, client->window,
                           2); // Adjust to your border size
 
-    client->is_fullscreen = false;
+    client->fullscreen = false;
   }
 }
 void lunch(const Arg *arg) {
@@ -361,6 +362,13 @@ static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
   if (!XSendEvent(display, root, False, mask, &ev)) {
     errx(1, "could not send event");
   }
+}
+void change_layout(const Arg *arg) {
+    if (arg->i < 0 || arg->i >= NUM_LAYOUTS)
+    	return;
+    current_workspace->layout = arg->i;
+    arrange_windows();
+    update_bar();
 }
 void focus_next_monitor(const Arg *arg) {
   if (monitors.empty())
