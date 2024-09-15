@@ -15,12 +15,18 @@ extern std::vector<Client> *clients;
 extern std::string status;
 void handle_button_press_event(XEvent *e) {
   int x = e->xbutton.x;
+  int y = e->xbutton.y;
 
   // Determine which button was clicked
   int button_index = x / BUTTONS_WIDTH;
-  if (button_index >= 0 && button_index < NUM_WORKSPACES) {
+  if (button_index >= 0 && y <= BAR_HEIGHT * (current_workspace->show_bar) &&
+      button_index < NUM_WORKSPACES) {
     switch_workspace(new (Arg){.i = button_index + 1});
     update_bar();
+  } else if (button_index >= 0 &&
+             y <= BAR_HEIGHT * (current_workspace->show_bar) &&
+             button_index ==  NUM_WORKSPACES+1) {
+      toggle_layout();
   }
 }
 void handle_focus_in(XEvent *e) {
@@ -65,7 +71,7 @@ void handle_map_request(XEvent *e) {
                    static_cast<unsigned int>(wa.height)};
   clients->push_back(client);
   current_workspace->master = clients->back().window;
-  tile_windows();
+  arrange_windows();
 }
 
 void handle_configure_request(XEvent *e) {
@@ -111,4 +117,15 @@ void handle_motion_notify(XEvent *e) {
     XClearWindow(display, current_monitor->bar);
     focus_monitor(monitor);
   }
+}
+void handle_destroy_notify(XEvent *e) {
+    XDestroyWindowEvent *ev = &e->xdestroywindow;
+
+    Window window = ev->event;
+    clients->erase(std::remove_if(clients->begin(), clients->end(),
+                                  [window](const Client &c) {
+                                    return c.window == window;
+                                  }),
+                   clients->end());
+
 }

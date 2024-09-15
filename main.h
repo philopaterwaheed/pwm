@@ -32,7 +32,7 @@ struct Client {
   int x, y;
   unsigned int width, height;
   bool floating = false; // Indicates whether the window is floating or tiled
-    bool is_fullscreen = false;     // Full-screen flag
+  bool fullscreen = false; // Full-screen flag
 };
 
 // to pass arguments to the functions
@@ -52,8 +52,10 @@ struct shortcut {
 };
 
 struct Layout {
+  short index;
   std ::string name;
-  void (*arrange)();
+  void (*arrange)(std::vector<Client *> *clients, int master_width,
+                  int screen_height, int screen_width);
 };
 /* union Button { */
 /*   std::string name; */
@@ -64,16 +66,17 @@ struct Layout {
 
 Client *find_client(Window w);
 int get_focused_window_index();
-void tile_windows();
+void tile_windows(std::vector<Client *> *clients, int master_width,
+                  int screen_height, int screen_width);
+void arrange_windows();
 void update_status(XEvent *ev);
 void warp_pointer_to_window(Window *win);
 void restack_windows();
-void update_bar() ;
+void update_bar();
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
-                                 int x, int y, int screen) ;
-void one_window() ;
-void cleanup() ;
+                                 int x, int y, int screen);
+void cleanup();
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg *arg);
 void resize_focused_window_y(const Arg *arg);
@@ -86,10 +89,12 @@ void toggle_floating(const Arg *arg);
 void swap_window(const Arg *arg);
 void switch_workspace(const Arg *arg);
 void move_window_to_workspace(const Arg *arg);
-void toggle_fullscreen(const Arg *arg) ;
+void toggle_fullscreen(const Arg *arg);
 void set_master(const Arg *arg);
-void toggle_bar(const Arg *arg) ;
-void make_fullscreen(Client *client);
+void toggle_bar(const Arg *arg);
+void change_layout(const Arg *arg) ;
+void focus_next_monitor(const Arg *arg);
+void focus_previous_monitor(const Arg *arg);
 // ///
 // event handlers
 void handle_focus_in(XEvent *e);
@@ -98,24 +103,30 @@ void handle_enter_notify(XEvent *e);
 void handle_map_request(XEvent *e);
 void handle_configure_request(XEvent *e);
 void handle_key_press(XEvent *e);
-void handle_key_press(XEvent *e) ;
-void handle_button_press_event(XEvent *e) ;
+void handle_key_press(XEvent *e);
+void handle_button_press_event(XEvent *e);
 void handle_motion_notify(XEvent *e);
+void handle_destroy_notify(XEvent *e) ;
+void handle_destroy_notify(XEvent *e) ;
 // font functions
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
-                                 int x, int y, int screen, int monitor_width) ;
+                                 int x, int y, int screen, int monitor_width);
 int get_utf8_string_width(Display *display, XftFont *font,
-                          const std::string &text) ;
-XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) ;
-int sendevent(Window window, Atom proto) ;
-static void
-clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1, unsigned long d2, unsigned long d3, unsigned long d4);
-void detect_monitors() ;
-Monitor* find_monitor_for_window(int x, int y) ;
-void assign_client_to_monitor(Client *client) ;
-Monitor* find_monitor_by_coordinates(int x, int y) ;
-void focus_monitor(Monitor *monitor) ;
-unsigned int find_monitor_index(Monitor *monitor) ;
-void focus_next_monitor(const Arg *arg) ;
-void focus_previous_monitor(const Arg *arg) ;
+                          const std::string &text);
+XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen);
+int sendevent(Window window, Atom proto);
+static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
+                      unsigned long d2, unsigned long d3, unsigned long d4);
+void detect_monitors();
+Monitor *find_monitor_for_window(int x, int y);
+void assign_client_to_monitor(Client *client);
+Monitor *find_monitor_by_coordinates(int x, int y);
+void focus_monitor(Monitor *monitor);
+unsigned int find_monitor_index(Monitor *monitor);
+void make_fullscreen(Client *client, int screen_width, int screen_height , bool raise = true) ;
+void monocle_windows(std::vector<Client *> *clients, int master_width,
+                     int screen_height, int screen_width) ;
+void grid_windows(std::vector<Client *> *clients, int master_width,
+                int screen_height, int screen_width) ; 
+void toggle_layout();
