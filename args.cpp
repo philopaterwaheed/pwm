@@ -13,7 +13,6 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Monitor> monitors; // List of monitors
 extern Monitor *current_monitor;
-extern Atom wmDeleteMessage;
 void resize_focused_window_y(const Arg *arg) {
   if (focused_window != None && focused_window != root) {
     XWindowChanges changes;
@@ -116,16 +115,20 @@ void kill_focused_window(const Arg *arg) {
                    clients->end());
 
     XUnmapWindow(display, focused_window);
-    clientmsg(focused_window, XInternAtom(display, "WM_DELETE_WINDOW", False),
-              CurrentTime, 2, 0, 0, 0);
+    if (!sendevent(focused_window,
+                   XInternAtom(display, "WM_DELETE_WINDOW", False))) {
+
+      XGrabServer(display);
+      XSetCloseDownMode(display, DestroyAll);
+      XKillClient(display, focused_window);
+      XSync(display, False);
+      XUngrabServer(display);
+    }
 
     // Update master window if needed
     if (focused_window == current_workspace->master) {
       current_workspace->master = None;
-      if (!clients->empty()) {
-        current_workspace->master = (*clients)[0].window;
       }
-    }
 
     focused_window = None;
     arrange_windows();
@@ -213,12 +216,12 @@ void toggle_floating(const Arg *arg) {
     }
     if (client->floating) {
       // Get the current window's geometry before making it float
-      /* XWindowAttributes wa; */
-      /* XGetWindowAttributes(display, focused_window, &wa); */
-      /* client->x = wa.x; */
-      /* client->y = wa.y; */
-      /* client->width = wa.width; */
-      /* client->height = wa.height; */
+      XWindowAttributes wa;
+      XGetWindowAttributes(display, focused_window, &wa);
+      client->x = wa.x;
+      client->y = wa.y;
+      client->width = wa.width;
+      client->height = wa.height;
 
       // Resize and move the window to some default position (e.g., 100, 100)
       // and set borders
@@ -316,6 +319,7 @@ void exit_pwm(const Arg *arg) {
   exit(0);
 }
 int sendevent(Window window, Atom proto) {
+  // borrowed from dwm like a lot of stuff :)
   XEvent ev;
   Atom wm_protocols = XInternAtom(display, "WM_PROTOCOLS", True);
   Atom *protocols;
