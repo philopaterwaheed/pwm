@@ -10,7 +10,7 @@
 #define SHIFT ShiftMask // Usually the shift key
 #define NUM_LAYOUTS 3
 
-static float master_size= .6;
+static float master_size = .6;
 // all about the bar
 static bool SHOW_BAR = true; // Whether to show the bar or not
 static std::string BAR_FONT =
@@ -19,9 +19,9 @@ static int BORDER_WIDTH = 1;   // Width of the window border in pixels
 static int BAR_HEIGHT = 30;    // Height of the bar in pixels
 static int BUTTONS_WIDTH = 30; // Width of the buttons in pixels
 static Layout LAYOUTS[NUM_LAYOUTS] = {
-    {0,"tiled",  tile_windows},
-    {1,"monocle", monocle_windows},
-    {2,"grid",  grid_windows},
+    {0, "tiled", tile_windows},
+    {1, "monocle", monocle_windows},
+    {2, "grid", grid_windows},
 };
 struct Workspace {
   short index; // set to one for the first workspace
@@ -30,7 +30,7 @@ struct Workspace {
       bar_height_place_holder = (SHOW_BAR) ? 0 : BAR_HEIGHT;
   std::vector<Client> clients = std::vector<Client>(0);
   Window master = None;
-  short layout = 0 , layout_index_place_holder  =1 ;
+  short layout = 0, layout_index_place_holder = 1;
   float master_persent = master_size;
 };
 // window
@@ -66,7 +66,9 @@ static const char col_gray4[] = "#BD93F9"; // font color
 static const char col_cyan[] = "#282A36";
 // commands
 static const char *term[] = {"st", NULL};
-static const char *s_shot[] = {"thunar", NULL}; // for screenshots
+static const char *bridown[] = {"sudo", "brillo", "-q", "-U", "5", NULL};
+static const char *briup[] = {"sudo", "brillo", "-q", "-A", "5", NULL};
+static const char *s_shot[] = {"flameshot", "gui", NULL}; // for screenshots
 static const char *dmenucmd[] = {
     "dmenu_run", "-m",      "0",   "-fn",    dmenufont, "-nb",     col_gray1,
     "-nf",       col_gray3, "-sb", col_cyan, "-sf",     col_gray4, NULL};
@@ -77,6 +79,8 @@ static std::vector<shortcut> shortcuts = {
     {MOD, XK_t, lunch, {.v = term}},
     {MOD, XK_Print, lunch, {.v = s_shot}},
     {MOD, XK_semicolon, lunch, {.v = dmenucmd}},
+    {MOD, XK_F1, lunch, {.v = briup}},
+    {MOD, XK_F2, lunch, {.v = bridown}},
     {MOD, XK_Return, toggle_fullscreen, {0}},
     {MOD, XK_b, toggle_bar, {0}},
     {MOD, XK_Right, resize_focused_window_x, {.i = +20}},

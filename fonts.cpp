@@ -7,7 +7,6 @@ extern Window focused_window, master_window, bar_window;
 extern XftFont *xft_font;
 extern XftDraw *xft_draw;
 extern XftColor xft_color;
-extern Atom wmDeleteMessage;
 std::unordered_map<FcChar32, XftFont *> font_cache;
 
 // Function to render text, choosing appropriate font dynamically with caching

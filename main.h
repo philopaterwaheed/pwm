@@ -19,6 +19,7 @@
 #include <string>
 #include <unordered_map>
 #include <err.h>
+#include <cmath>
 
 #define CLEANMASK(mask)                                                        \
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
@@ -71,7 +72,6 @@ void tile_windows(std::vector<Client *> *clients, int master_width,
 void arrange_windows();
 void update_status(XEvent *ev);
 void warp_pointer_to_window(Window *win);
-void restack_windows();
 void update_bar();
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
@@ -108,7 +108,6 @@ void handle_button_press_event(XEvent *e);
 void handle_motion_notify(XEvent *e);
 void handle_destroy_notify(XEvent *e) ;
 void handle_destroy_notify(XEvent *e) ;
-void handle_client_message( XEvent *ev) ;
 // font functions
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
@@ -131,3 +130,4 @@ void monocle_windows(std::vector<Client *> *clients, int master_width,
 void grid_windows(std::vector<Client *> *clients, int master_width,
                 int screen_height, int screen_width) ; 
 void toggle_layout();
+int errorHandler(Display* display, XErrorEvent* errorEvent) ;
