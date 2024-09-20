@@ -104,7 +104,6 @@ static std::vector<shortcut> shortcuts = {
     {MOD | SHIFT, XK_l, change_focused_window_cfact, {.f = +.05}},
     {MOD | SHIFT, XK_h, change_focused_window_cfact, {.f = -.05}},
     {MOD | SHIFT, XK_f, set_master, {0}},
-    {MOD, Button1, lunch, {.v = term}},
     {MOD | ALT, XK_space, change_layout, {0}},
     {MOD | ALT, XK_m, change_layout, {.i = 1}},
     {MOD | ALT, XK_g, change_layout, {.i = 2}},

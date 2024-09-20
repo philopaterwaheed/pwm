@@ -211,7 +211,6 @@ void toggle_floating(const Arg *arg) {
     return;
 
   Client *client = find_client(focused_window);
-  const int border_width = 2; // Border width in pixels
 
   if (client && !client->fullscreen) {
     // Toggle the floating status of the focused window
@@ -222,22 +221,22 @@ void toggle_floating(const Arg *arg) {
     if (client->floating) { // if we are no resizing the window
       // center the window
       if (arg->i != 21) {
-        client->x = (current_monitor->x + current_monitor->width) / 4;
-        client->y = (current_monitor->y + current_monitor->height) / 4;
+        client->x = current_monitor->x + (current_monitor->width) / 4;
+        client->y = current_monitor->y + (current_monitor->height) / 4;
         client->width = current_monitor->width / 2;
         client->height = current_monitor->height / 2;
 
-        XMoveResizeWindow(display, focused_window, client->x, client->y,
+        XMoveResizeWindow(display, client->window, client->x, client->y,
                           client->width, client->height);
-        // and set borders
-        XSetWindowBorderWidth(
-            display, focused_window,
-            border_width); // Set border width for floating windows */
-
-        // Ensure the floating window is raised above other windows
-        XRaiseWindow(display, focused_window);
       }
     }
+    // and set borders
+    XSetWindowBorderWidth(
+        display, focused_window,
+        BORDER_WIDTH); // Set border width for floating windows */
+
+    // Ensure the floating window is raised above other windows
+    XRaiseWindow(display, focused_window);
     // Rearrange windows after toggling floating
     arrange_windows();
 
@@ -408,17 +407,18 @@ void change_layout(const Arg *arg) {
   arrange_windows();
   update_bar();
 }
+
 void focus_next_monitor(const Arg *arg) {
   if (monitors.empty())
     return;
 
-  // Move to the previous monitor
+  // Move to the next monitor
   unsigned int focused_monitor_index = find_monitor_index(current_monitor);
-  unsigned int new_index = focused_monitor_index + 1;
-  if (focused_monitor_index >= monitors.size()) {
-    new_index = 0;
-  }
+  unsigned int new_index = (focused_monitor_index + 1) % monitors.size();
+
   Monitor *monitor = &monitors[new_index];
+  XClearWindow(display, current_monitor->bar);
+  focus_monitor(monitor);
 }
 
 void focus_previous_monitor(const Arg *arg) {
@@ -427,12 +427,15 @@ void focus_previous_monitor(const Arg *arg) {
 
   // Move to the previous monitor
   unsigned int focused_monitor_index = find_monitor_index(current_monitor);
-  unsigned int new_index = focused_monitor_index - 1;
-  if (focused_monitor_index < 0) {
-    new_index = monitors.size() - 1;
-  }
+  unsigned int new_index = (focused_monitor_index == 0)
+                               ? monitors.size() - 1
+                               : focused_monitor_index - 1;
+
   Monitor *monitor = &monitors[new_index];
+  XClearWindow(display, current_monitor->bar);
+  focus_monitor(monitor);
 }
+
 void change_focused_window_cfact(const Arg *arg) {
   Client *client = find_client(focused_window);
   float temp = client->cfact;

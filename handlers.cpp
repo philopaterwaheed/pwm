@@ -133,7 +133,6 @@ void handle_motion_notify(XEvent *e) {
   if (monitor && monitor != current_monitor) {
     XClearWindow(display, current_monitor->bar);
     focus_monitor(monitor);
-    update_bar();
   }
 }
 
