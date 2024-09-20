@@ -11,16 +11,24 @@
 #include <X11/X.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <X11/extensions/Xinerama.h>
 #include <X11/Xproto.h>
 #include <cstdlib>
 #include <fontconfig/fontconfig.h>
+#include <X11/cursorfont.h>
 #include <iostream>
 #include <string>
 #include <unordered_map>
 #include <err.h>
 #include <cmath>
+#include <csignal>
+#include <wait.h>
 
+#define HEIGHT(X) ((X)->height + 2 * BORDER_WIDTH)
+#define WIDTH(X) ((X)->width + 2  * BORDER_WIDTH)
+#define BUTTONMASK              (ButtonPressMask|ButtonReleaseMask)
+#define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define CLEANMASK(mask)                                                        \
   (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
            Mod4Mask | Mod5Mask))
@@ -32,13 +40,15 @@ struct Client {
   Window window; // the window id
   int x, y;
   unsigned int width, height;
-  bool floating = false; // Indicates whether the window is floating or tiled
+  bool floating = false;   // Indicates whether the window is floating or tiled
   bool fullscreen = false; // Full-screen flag
+  float cfact = 1;         // Size factor relative to other clients
 };
 
 // to pass arguments to the functions
 union Arg {
   int i;
+  float f ; 
   void *v;
 };
 struct shortcut {
@@ -58,20 +68,22 @@ struct Layout {
   void (*arrange)(std::vector<Client *> *clients, int master_width,
                   int screen_height, int screen_width);
 };
-/* union Button { */
-/*   std::string name; */
-/*   unsigned int id; */
-/*   void (*func)(const Arg *arg); */
-/*   Arg arg; */
-/* }; */
+struct Button {
+  unsigned int mask;
+  unsigned int id;
+  void (*func)(const Arg *arg);
+  Arg arg;
+};
 
+enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor states*/
 Client *find_client(Window w);
 int get_focused_window_index();
 void tile_windows(std::vector<Client *> *clients, int master_width,
                   int screen_height, int screen_width);
 void arrange_windows();
 void update_status(XEvent *ev);
-void warp_pointer_to_window(Window *win);
+void warp(const Client *c) ;
+void movement_warp(Window *win) ;
 void update_bar();
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
@@ -82,6 +94,7 @@ void resize_focused_window_x(const Arg *arg);
 void resize_focused_window_y(const Arg *arg);
 void move_focused_window_x(const Arg *arg);
 void move_focused_window_y(const Arg *arg);
+void change_focused_window_cfact(const Arg *arg);
 void kill_focused_window(const Arg *arg);
 void exit_pwm(const Arg *arg);
 void lunch(const Arg *arg);
@@ -95,6 +108,9 @@ void toggle_bar(const Arg *arg);
 void change_layout(const Arg *arg) ;
 void focus_next_monitor(const Arg *arg);
 void focus_previous_monitor(const Arg *arg);
+void change_master_width(const Arg *arg) ;
+void movemouse(const Arg *arg) ;
+void resizemouse(const Arg *arg) ;
 // ///
 // event handlers
 void handle_focus_in(XEvent *e);
@@ -129,5 +145,16 @@ void monocle_windows(std::vector<Client *> *clients, int master_width,
                      int screen_height, int screen_width) ;
 void grid_windows(std::vector<Client *> *clients, int master_width,
                 int screen_height, int screen_width) ; 
+void center_master_windows(std::vector<Client *> *clients, int master_width,
+                           int screen_height, int screen_width) ;
 void toggle_layout();
 int errorHandler(Display* display, XErrorEvent* errorEvent) ;
+
+void grabbuttons() ;
+void set_size_hints(Window win) ;
+bool wants_floating(Window win) ;
+Cursor cur_create(int shape) ;
+void setup();
+int getrootptr(int *x, int *y) ;
+void configure(Client *c) ;
+void resizeclient(Client *c, int x, int y, int w, int h) ;

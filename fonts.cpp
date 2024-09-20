@@ -8,6 +8,7 @@ extern XftFont *xft_font;
 extern XftDraw *xft_draw;
 extern XftColor xft_color;
 std::unordered_map<FcChar32, XftFont *> font_cache;
+Cursor cursors[3];
 
 // Function to render text, choosing appropriate font dynamically with caching
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
@@ -16,7 +17,9 @@ void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
   int x_offset = x;
 
   // Ensure draw context is correct for the specified window
-  XftDraw* window_draw = XftDrawCreate(display, window, DefaultVisual(display, screen), DefaultColormap(display, screen));
+  XftDraw *window_draw =
+      XftDrawCreate(display, window, DefaultVisual(display, screen),
+                    DefaultColormap(display, screen));
 
   for (size_t i = 0; i < text.size();) {
     // Decode the UTF-8 character
@@ -43,7 +46,8 @@ void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
     }
 
     // Render the character
-    XftDrawStringUtf8(window_draw, color, font, x_offset, y + extents.y, (FcChar8 *)&text[i], bytes);
+    XftDrawStringUtf8(window_draw, color, font, x_offset, y + extents.y,
+                      (FcChar8 *)&text[i], bytes);
     x_offset += extents.xOff;
 
     // Move to the next character
@@ -107,3 +111,16 @@ XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) {
 
   return font;
 }
+Cursor cur_create(int shape) {
+  Cursor cur = XCreateFontCursor(display, shape);
+  return cur;
+}
+
+void cur_free(Cursor *cursor) {
+  if (!cursor)
+    return;
+
+  XFreeCursor(display, *cursor);
+  free(cursor);
+}
+void cur_free(Cursor *cursor) ;

@@ -13,8 +13,12 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Monitor> monitors; // List of monitors
 extern Monitor *current_monitor;
+extern Cursor cursors[3];
+
 void resize_focused_window_y(const Arg *arg) {
-  if (focused_window != None && focused_window != root) {
+  Client *c = find_client(focused_window);
+  if (focused_window != None && focused_window != root && c->floating &&
+      !c->fullscreen) {
     XWindowChanges changes;
 
     // Get the current window attributes to calculate the new size
@@ -23,19 +27,21 @@ void resize_focused_window_y(const Arg *arg) {
 
     // Adjust width and height based on delta
     changes.height = wa.height + arg->i;
-    changes.width = 0;
+    c->height = wa.height + arg->i;
 
-    // Prevent the window from being resized too small
+    // Prev the window from being resized too small
     if (changes.height < 100)
       changes.height = 100;
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWHeight, &changes);
-    warp_pointer_to_window(&focused_window);
+    movement_warp(&focused_window);
   }
 }
 void resize_focused_window_x(const Arg *arg) {
-  if (focused_window != None && focused_window != root) {
+  Client *c = find_client(focused_window);
+  if (focused_window != None && focused_window != root && c->floating &&
+      !c->fullscreen) {
     XWindowChanges changes;
 
     // Get the current window attributes to calculate the new size
@@ -44,20 +50,22 @@ void resize_focused_window_x(const Arg *arg) {
 
     // Adjust width and height based on delta
     changes.width = wa.width + arg->i;
-    changes.height = 0;
+    c->width = wa.width + arg->i;
 
-    // Prevent the window from being resized too small
+    // Prev the window from being resized too small
     if (changes.width < 100)
       changes.width = 100;
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWWidth, &changes);
-    warp_pointer_to_window(&focused_window);
+    movement_warp(&focused_window);
   }
 }
 
 void move_focused_window_x(const Arg *arg) {
-  if (focused_window != None && focused_window != root) {
+  Client *c = find_client(focused_window);
+  if (focused_window != None && focused_window != root && c->floating &&
+      !c->fullscreen) {
     XWindowChanges changes;
     XWindowAttributes wa;
     XSetInputFocus(display, focused_window, RevertToPointerRoot, CurrentTime);
@@ -66,13 +74,16 @@ void move_focused_window_x(const Arg *arg) {
     Window dummy =
         focused_window; // for if the window changed focus after moving
     changes.x = wa.x + arg->i;
+    c->x = wa.x + arg->i;
     XConfigureWindow(display, focused_window, CWX, &changes);
     XConfigureWindow(display, dummy, CWX, &changes);
-    warp_pointer_to_window(&dummy);
+    movement_warp(&dummy);
   }
 }
 void move_focused_window_y(const Arg *arg) {
-  if (focused_window != None && focused_window != root) {
+  Client *c = find_client(focused_window);
+  if (focused_window != None && focused_window != root && c->floating &&
+      !c->fullscreen) {
     XWindowChanges changes;
     XWindowAttributes wa;
     XSetInputFocus(display, focused_window, RevertToPointerRoot, CurrentTime);
@@ -80,9 +91,10 @@ void move_focused_window_y(const Arg *arg) {
     Window dummy =
         focused_window; // for if the window changed focus after moving
     changes.y = wa.y + arg->i;
+    c->y = wa.y + arg->i;
     XConfigureWindow(display, focused_window, CWY, &changes);
     XConfigureWindow(display, dummy, CWY, &changes);
-    warp_pointer_to_window(&dummy);
+    movement_warp(&dummy);
   }
 }
 void swap_window(const Arg *arg) {
@@ -98,9 +110,8 @@ void swap_window(const Arg *arg) {
       current_workspace->master = (*clients)[index2].window;
 
     std::swap((*clients)[index1], (*clients)[index2]);
-    /* warp_pointer_to_window(focused_window); */
+    movement_warp(&focused_window);
     arrange_windows(); // Rearrange windows after swapping
-    warp_pointer_to_window(&(*clients)[index2].window);
   }
 }
 void kill_focused_window(const Arg *arg) {
@@ -108,13 +119,6 @@ void kill_focused_window(const Arg *arg) {
 
   if (focused_window != None) {
     // Remove the focused window from the client list
-    clients->erase(std::remove_if(clients->begin(), clients->end(),
-                                  [](const Client &c) {
-                                    return c.window == focused_window;
-                                  }),
-                   clients->end());
-
-    XUnmapWindow(display, focused_window);
     if (!sendevent(focused_window,
                    XInternAtom(display, "WM_DELETE_WINDOW", False))) {
 
@@ -123,22 +127,26 @@ void kill_focused_window(const Arg *arg) {
       XKillClient(display, focused_window);
       XSync(display, False);
       XUngrabServer(display);
-    }
-
-    // Update master window if needed
-    if (focused_window == current_workspace->master) {
-      current_workspace->master = None;
+      clients->erase(std::remove_if(clients->begin(), clients->end(),
+                                    [](const Client &c) {
+                                      return c.window == focused_window;
+                                    }),
+                     clients->end());
+      // Update master window if needed
+      if (focused_window == current_workspace->master) {
+        current_workspace->master = None;
       }
 
-    focused_window = None;
-    arrange_windows();
+      focused_window = None;
+    }
   }
+  arrange_windows();
 }
 void set_master(const Arg *arg) {
   if (focused_window != None) {
     current_workspace->master = focused_window;
     arrange_windows();
-    warp_pointer_to_window(&focused_window);
+    /* warp_pointer_to_window(&focused_window); */
   }
 }
 void switch_workspace(const Arg *arg) {
@@ -205,41 +213,35 @@ void toggle_floating(const Arg *arg) {
   Client *client = find_client(focused_window);
   const int border_width = 2; // Border width in pixels
 
-  if (client) {
+  if (client && !client->fullscreen) {
     // Toggle the floating status of the focused window
     client->floating = !client->floating;
     if (client->window == current_workspace->master) {
       current_workspace->master = None;
-      if (clients->size() > 0) {
-        current_workspace->master = (*clients)[0].window;
+    }
+    if (client->floating) { // if we are no resizing the window
+      // center the window
+      if (arg->i != 21) {
+        client->x = (current_monitor->x + current_monitor->width) / 4;
+        client->y = (current_monitor->y + current_monitor->height) / 4;
+        client->width = current_monitor->width / 2;
+        client->height = current_monitor->height / 2;
+
+        XMoveResizeWindow(display, focused_window, client->x, client->y,
+                          client->width, client->height);
+        // and set borders
+        XSetWindowBorderWidth(
+            display, focused_window,
+            border_width); // Set border width for floating windows */
+
+        // Ensure the floating window is raised above other windows
+        XRaiseWindow(display, focused_window);
       }
     }
-    if (client->floating) {
-      // Get the current window's geometry before making it float
-      XWindowAttributes wa;
-      XGetWindowAttributes(display, focused_window, &wa);
-      client->x = wa.x;
-      client->y = wa.y;
-      client->width = wa.width;
-      client->height = wa.height;
-
-      // Resize and move the window to some default position (e.g., 100, 100)
-      // and set borders
-      XMoveResizeWindow(display, focused_window, 100, 100,
-                        800 - 2 * border_width, 600 - 2 * border_width);
-      /* XSetWindowBorderWidth( */
-      /*     display, focused_window, */
-      /*     border_width); // Set border width for floating windows */
-
-      // Ensure the floating window is raised above other windows
-      XRaiseWindow(display, focused_window);
-    }
-
     // Rearrange windows after toggling floating
     arrange_windows();
 
-    // Optionally warp the mouse pointer to the newly floating window
-    warp_pointer_to_window(&client->window);
+    (arg->i != 21) ? movement_warp(&focused_window) : void();
   }
 }
 void toggle_bar(const Arg *arg) {
@@ -253,7 +255,7 @@ void toggle_bar(const Arg *arg) {
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |
                      KeyPressMask | ExposureMask | PropertyChangeMask |
-                     MotionNotify | SubstructureRedirectMask |
+                     /* MotionNotify | */ SubstructureRedirectMask |
                      SubstructureNotifyMask | ButtonPressMask |
                      PointerMotionMask | EnterWindowMask | LeaveWindowMask |
                      StructureNotifyMask | PropertyChangeMask);
@@ -265,7 +267,7 @@ void toggle_bar(const Arg *arg) {
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |
                      KeyPressMask | ExposureMask | PropertyChangeMask |
-                     MotionNotify | SubstructureRedirectMask |
+                     /* MotionNotify | */ SubstructureRedirectMask |
                      SubstructureNotifyMask | ButtonPressMask |
                      PointerMotionMask | EnterWindowMask | LeaveWindowMask |
                      StructureNotifyMask);
@@ -273,6 +275,7 @@ void toggle_bar(const Arg *arg) {
   arrange_windows();
 }
 void toggle_fullscreen(const Arg *arg) {
+  // todo fix the fullscreen on proebrty change
   auto client = find_client(focused_window);
   if (!client)
     return;
@@ -286,30 +289,58 @@ void toggle_fullscreen(const Arg *arg) {
                       client->width, client->height);
 
     // Restore the window border
-    /* XSetWindowBorderWidth(display, client->window, */
-    /*                       2); // Adjust to your border size */
+    XSetWindowBorderWidth(display, client->window, BORDER_WIDTH);
 
     client->fullscreen = false;
   }
 }
+/* void lunch(const Arg *arg) { */
+/*   char **args = (char **)arg->v; */
+/*   struct sigaction sa; */
+/**/
+/*   if (fork() == 0) { */
+/*     if (display) */
+/*       close(ConnectionNumber( */
+/*           display)); // if the display is open, close it */
+/*                      // The close(ConnectionNumber(display)) call closes the
+ * file
+ */
+/*                      // descriptor associated with the display connection in
+ * the */
+/*                      // child process. This is necessary because the child */
+/*                      // process doesn't need to maintain the X connection—it
+ */
+/*                      // will execute a new program. */
+/*     setsid(); */
+/*     //    function call creates a new session and sets the child process as
+ * the */
+/*     //    session leader. This detaches the child process from the terminal
+ * (if */
+/*     //    anew_y) and makes it independent of the parent process group. */
+/*     sigemptyset(&sa.sa_mask); */
+/*     sa.sa_flags = 0; */
+/*     sa.sa_handler = SIG_DFL; */
+/*     sigaction(SIGCHLD, &sa, NULL); */
+/*     execvp(args[0], args); */
+/*     // The execvp() function replaces the current process image with a new */
+/*     // process */
+/*     exit(1); */
+/*   } */
+/* } */
 void lunch(const Arg *arg) {
-  auto args = (char **)arg->v;
+  struct sigaction sa;
+
   if (fork() == 0) {
     if (display)
-      close(ConnectionNumber(
-          display)); // if the display is open, close it
-                     // The close(ConnectionNumber(dpy)) call closes the file
-                     // descriptor associated with the display connection in the
-                     // child process. This is necessary because the child
-                     // process doesn't need to maintain the X connection—it
-                     // will execute a new program.
+      close(ConnectionNumber(display));
     setsid();
-    //    function call creates a new session and sets the child process as the
-    //    session leader. This detaches the child process from the terminal (if
-    //    any) and makes it independent of the parent process group.
-    execvp(args[0], args);
-    // The execvp() function replaces the current process image with a new
-    // process
+
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sa.sa_handler = SIG_DFL;
+    sigaction(SIGCHLD, &sa, NULL);
+
+    execvp(((char **)arg->v)[0], (char **)arg->v);
     exit(1);
   }
 }
@@ -321,7 +352,7 @@ void exit_pwm(const Arg *arg) {
 int sendevent(Window window, Atom proto) {
   // borrowed from dwm like a lot of stuff :)
   XEvent ev;
-  Atom wm_protocols = XInternAtom(display, "WM_PROTOCOLS", True);
+  Atom wm_protocols = XInternAtom(display, "WM_PROTOCOLS", false);
   Atom *protocols;
   int n;
   int exists = 0;
@@ -365,7 +396,7 @@ static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
   ev.xclient.data.l[3] = d3;
   ev.xclient.data.l[4] = d4;
   if (!XSendEvent(display, root, False, mask, &ev)) {
-    errx(1, "could not send event");
+    errx(1, "could not send ev");
   }
   // from https://github.com/phillbush/shod
   // thanks the only message that helped me in killing windows
@@ -388,7 +419,6 @@ void focus_next_monitor(const Arg *arg) {
     new_index = 0;
   }
   Monitor *monitor = &monitors[new_index];
-  XWarpPointer(display, None, None, 0, 0, 0, 0, monitor->x, monitor->y);
 }
 
 void focus_previous_monitor(const Arg *arg) {
@@ -402,6 +432,176 @@ void focus_previous_monitor(const Arg *arg) {
     new_index = monitors.size() - 1;
   }
   Monitor *monitor = &monitors[new_index];
-  XWarpPointer(display, None, None, 0, 0, 0, 0, monitor->width / 2,
-               monitor->height / 2);
+}
+void change_focused_window_cfact(const Arg *arg) {
+  Client *client = find_client(focused_window);
+  float temp = client->cfact;
+  client->cfact += arg->f;
+  if (client->cfact < 0.1)
+    client->cfact = 0.1;
+  if (client->cfact > 1)
+    client->cfact = 1;
+  if (temp != client->cfact) // it will be an overhead if arrang every time even
+                             // if did't change
+    arrange_windows();
+}
+void change_master_width(const Arg *arg) {
+  float temp = current_workspace->master_persent;
+  current_workspace->master_persent += arg->f;
+  if (current_workspace->master_persent < 0.1)
+    current_workspace->master_persent = 0.1;
+  if (current_workspace->master_persent > 0.9)
+    current_workspace->master_persent = 0.9;
+  if (temp != current_workspace->master_persent)
+    arrange_windows();
+}
+void movemouse(const Arg *arg) {
+  int x, y, ocx, ocy, new_x, new_y;
+  XEvent ev;
+  Time lasttime = 0;
+  Client *client = find_client(focused_window);
+  if (!client || client->fullscreen ||
+      current_workspace->layout ==
+          1) // no support for resizing fullscreen windows by mouse or moncole
+    return;
+  if (!client->floating)
+    toggle_floating(arg);
+
+  ocx = client->x, ocy = client->y;
+  if (XGrabPointer(display, root, False, MOUSEMASK, GrabModeAsync,
+                   GrabModeAsync, None, cursors[CurMove],
+                   CurrentTime) != GrabSuccess)
+    return;
+  if (!getrootptr(&x, &y))
+    return;
+  do {
+    XMaskEvent(display, MOUSEMASK | ExposureMask | SubstructureRedirectMask,
+               &ev);
+    switch (ev.type) {
+    case ConfigureRequest:
+    case Expose:
+    case MapRequest:
+      handle_map_request(&ev);
+      break;
+    case MotionNotify:
+      if ((ev.xmotion.time - lasttime) <= (1000 / 60))
+        continue;
+      lasttime = ev.xmotion.time;
+
+      new_x = ocx + (ev.xmotion.x - x);
+      new_y = ocy + (ev.xmotion.y - y);
+      if (abs(current_monitor->x - new_x) < snap)
+        new_x = current_monitor->x;
+      else if (((current_monitor->x + current_monitor->width) -
+                (new_x + WIDTH(client))) < snap)
+        new_x = current_monitor->x + current_monitor->width - WIDTH(client);
+      if (abs(current_monitor->y + current_workspace->bar_height - new_y) <
+          snap)
+        new_y = current_monitor->y + current_workspace->bar_height;
+      else if (((current_monitor->y + current_monitor->height) -
+                (new_y + HEIGHT(client))) < snap)
+        new_y = current_monitor->y + current_monitor->height - HEIGHT(client);
+      /* if (!c->isfloating && selmon->lt[selmon->sellt]->arrange && */
+      /*     (abs(new_x - c->x) > snap || abs(new_y - c->y) > snap)) */
+      /*   togglefloating(NULL); */
+      /* if (!selmon->lt[selmon->sellt]->arrange || c->isfloating) */
+
+      client->x = new_x;
+      client->y = new_y;
+      XMoveResizeWindow(display, client->window, new_x, new_y, client->width,
+                        client->height);
+      break;
+    }
+  } while (ev.type != ButtonRelease);
+  XUngrabPointer(display, CurrentTime);
+  /* if ((m = recttomon(c->x, c->y, c->w, c->h)) != selmon) { */
+  /*   sendmon(c, m); */
+  /*   selmon = m; */
+  /*   focus(NULL); */
+  /* } */
+  // code for monitors check it
+}
+void resizemouse(const Arg *arg) {
+  int originalClientX, originalClientY, newWidth, newHeight;
+  Client *client = find_client(focused_window);
+  XEvent ev;
+  Time lastMotionTime = 0;
+
+  if (client->fullscreen ||
+      current_workspace->layout ==
+          1) // no support for resizing fullscreen windows by mouse or moncole
+
+    return;
+
+  originalClientX = client->x;
+  originalClientY = client->y;
+
+  if (XGrabPointer(display, root, False, MOUSEMASK, GrabModeAsync,
+                   GrabModeAsync, None, cursors[CurResize],
+                   CurrentTime) != GrabSuccess)
+    return;
+
+  if (arg->i != 1)
+    XWarpPointer(display, None, client->window, 0, 0, 0, 0,
+                 client->width + BORDER_WIDTH - 1,
+                 client->height + BORDER_WIDTH - 1);
+
+  do {
+    XMaskEvent(display, MOUSEMASK | ExposureMask | SubstructureRedirectMask,
+               &ev);
+    switch (ev.type) {
+    case ConfigureRequest:
+    case Expose:
+    case MapRequest:
+      handle_map_request(&ev);
+      break;
+
+    case MotionNotify:
+      if ((ev.xmotion.time - lastMotionTime) <= (1000 / 60))
+        continue;
+      lastMotionTime = ev.xmotion.time;
+
+      newWidth =
+          std::max(ev.xmotion.x - originalClientX - 2 * BORDER_WIDTH + 1, 1);
+      newHeight =
+          std::max(ev.xmotion.y - originalClientY - 2 * BORDER_WIDTH + 1, 1);
+
+      if (current_monitor->x + newWidth >= current_monitor->x &&
+          current_monitor->x + newWidth <=
+              current_monitor->x + current_monitor->width &&
+          current_monitor->y + newHeight >= current_monitor->y &&
+          current_monitor->y + newHeight <=
+              current_monitor->y + current_monitor->height) {
+
+        if (!client->floating && ((newWidth - client->width) > snap ||
+                                  (newHeight - client->height) > snap)) {
+          toggle_floating(arg);
+        }
+      }
+
+      if (client->floating)
+        XMoveResizeWindow(display, client->window, client->x, client->y,
+                          newWidth, newHeight);
+      break;
+    }
+  } while (ev.type != ButtonRelease);
+  client->width = newWidth;
+  client->height = newHeight;
+
+  XWarpPointer(display, None, client->window, 0, 0, 0, 0,
+               client->width + BORDER_WIDTH - 1,
+               client->height + BORDER_WIDTH - 1);
+
+  XUngrabPointer(display, CurrentTime);
+
+  while (XCheckMaskEvent(display, EnterWindowMask, &ev))
+    ;
+
+  /* if ((activeMonitor = recttomon(client->x, client->y, client->w, client->h))
+   * != */
+  /*     selmon) { */
+  /*   sendmon(client, activeMonitor); */
+  /*   selmon = activeMonitor; */
+  /*   focus(NULL); */
+  /* } */
 }
