@@ -104,7 +104,7 @@ void update_bar() {
                      DefaultGC(display, DefaultScreen(display)), x, 0,
                      BUTTONS_WIDTH, current_workspace->bar_height);
     }
-    std::string button_label = workspaces_names[i];
+    std::string button_label = std::to_string(find_monitor_index(current_monitor)); //workspaces_names[i];
     draw_text_with_dynamic_font(display, current_monitor->bar, xft_draw,
                                 &xft_color, button_label.c_str(), x + 10, 15,
                                 XDefaultScreen(display),
@@ -138,7 +138,7 @@ void warp(const Client *c) {
   if (!c) {
     XWarpPointer(display, None, root, 0, 0, 0, 0,
                  current_monitor->x + current_monitor->width / 2,
-                 current_monitor->y + current_monitor->width / 2);
+                 current_monitor->y + current_monitor->height / 2);
     return;
   }
 
@@ -306,17 +306,16 @@ void tile_windows(std::vector<Client *> *clients, int master_width,
         make_fullscreen(c, screen_width, screen_height, false);
         break; // we have no more windows
       }
-      XMoveResizeWindow(
-          display, c->window, current_monitor->x + GAP_SIZE,
-          current_monitor->y + current_workspace->bar_height +
-              GAP_SIZE, // Position with gaps and bar height
-          master_width -
-              2 * (GAP_SIZE +
-                   BORDER_WIDTH), // Width adjusted for border and gaps
-          screen_height - current_workspace->bar_height -
-              2 * (GAP_SIZE +
-                   BORDER_WIDTH) // Height adjusted for bar, border, and gaps
-      );
+      int x = current_monitor->x + GAP_SIZE;
+      int y = current_monitor->y + current_workspace->bar_height + GAP_SIZE;
+      int w = master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
+      int h = screen_height - current_workspace->bar_height -
+              2 * (GAP_SIZE + BORDER_WIDTH);
+      XMoveResizeWindow(display, c->window, x, y, w, h);
+      c->x = x;
+      c->y = y;
+      c->width = w;
+      c->height = h;
     } else {
       // Stack windows positioning with border
       int y = last_y + ((tiled_index != 1) + 1) *
@@ -381,6 +380,8 @@ void grid_windows(std::vector<Client *> *clients, int master_width,
     XSetWindowBorderWidth(display, client->window,
                           BORDER_WIDTH); // Set border Width
 
+    XLowerWindow(display,
+                 client->window); // Lower windows to avoid overlap with floaters
     i++;
   }
 }
@@ -577,6 +578,8 @@ void focus_monitor(Monitor *monitor) {
                                               // this but it's what it is
   clients = &current_workspace->clients;
   focused_window = None;
+  update_bar();
+  warp(NULL);
 }
 unsigned int find_monitor_index(Monitor *monitor) {
   for (unsigned int i = 0; i < monitors.size(); ++i) {
