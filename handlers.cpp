@@ -14,6 +14,15 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::string status;
 void handle_button_press_event(XEvent *e) {
+    XButtonPressedEvent *ev = &e->xbutton; 
+for (auto button : buttons) {
+	if (e->xbutton.button == button.id && CLEANMASK(ev->state) == CLEANMASK(button.mask) &&
+		button.func){
+	  button.func(&(button.arg));
+	  return;
+	}
+
+}
   int x = e->xbutton.x;
   int y = e->xbutton.y;
 
@@ -33,7 +42,7 @@ void handle_focus_in(XEvent *e) {
   XFocusChangeEvent *ev = &e->xfocus;
   focused_window = ev->window;
   /* if (focused_window != None) */
-  /* XSetWindowBorder(display, focused_window, FOCUSED_BORDER_COLOR); */
+  XSetWindowBorder(display, focused_window, FOCUSED_BORDER_COLOR);
 }
 
 void handle_focus_out(XEvent *e) {
@@ -42,7 +51,7 @@ void handle_focus_out(XEvent *e) {
       None) // that happens when we are killing leaading to program crash
     return;
   /* else */
-  /* XSetWindowBorder(display, ev->window, BORDER_COLOR); */
+  XSetWindowBorder(display, ev->window, BORDER_COLOR);
 }
 
 // handle the mouse enter event
@@ -58,20 +67,28 @@ void handle_map_request(XEvent *e) {
   XWindowAttributes wa;
   XGetWindowAttributes(display, ev->window, &wa);
 
+  focused_window = ev->window;
   if (wa.override_redirect)
     return;
 
+  XSetWindowBorder(display, ev->window, BORDER_COLOR);
+  Client client = {ev->window,
+                   wa.x,
+                   wa.y,
+                   static_cast<unsigned int>(wa.width),
+                   static_cast<unsigned int>(wa.height),
+                   .floating = wants_floating(ev->window)};
+  clients->push_back(client);
+  if (!client.floating)
+    current_workspace->master = clients->back().window;
+  focused_window = clients->back().window;
+  arrange_windows();
   XSelectInput(display, ev->window, EnterWindowMask | FocusChangeMask);
   XMapWindow(display, ev->window);
   // Set border width
-  /* XSetWindowBorderWidth(display, ev->window, BORDER_WIDTH); */
+  XSetWindowBorderWidth(display, ev->window, BORDER_WIDTH);
   // Set initial border color (unfocused)
-  /* XSetWindowBorder(display, ev->window, BORDER_COLOR); */
-  Client client = {ev->window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
-                   static_cast<unsigned int>(wa.height)};
-  clients->push_back(client);
-  current_workspace->master = client.window;
-  arrange_windows();
+  // we map afterarrange for  redusing visual glitchs 
 }
 
 void handle_configure_request(XEvent *e) {
@@ -88,6 +105,7 @@ void handle_configure_request(XEvent *e) {
   changes.stack_mode = ev->detail;
 
   XConfigureWindow(display, ev->window, ev->value_mask, &changes);
+  set_size_hints(ev->window);
 }
 void handle_key_press(XEvent *e) {
   XKeyEvent *ev = &e->xkey;
@@ -124,7 +142,6 @@ void handle_destroy_notify(XEvent *e) {
   XDestroyWindowEvent *ev = &e->xdestroywindow;
   // Get the window ID that was destroyed
   Window window = ev->window;
-
   clients->erase(
       std::remove_if(clients->begin(), clients->end(),
                      [&window](const Client &c) { return c.window == window; }),
@@ -132,7 +149,8 @@ void handle_destroy_notify(XEvent *e) {
   if (window == current_workspace->master) {
     current_workspace->master = None;
   }
-  
+  XUnmapWindow(display, window);
+
   focused_window = None;
   arrange_windows();
 }
