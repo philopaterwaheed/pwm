@@ -13,6 +13,7 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Monitor> monitors; // List of monitors
 extern Monitor *current_monitor;
+extern std::vector<Client> *sticky;
 extern Cursor cursors[3];
 
 void resize_focused_window_y(const Arg *arg) {
@@ -132,6 +133,11 @@ void kill_focused_window(const Arg *arg) {
                                       return c.window == focused_window;
                                     }),
                      clients->end());
+      sticky->erase(std::remove_if(sticky->begin(), sticky->end(),
+                                   [](const Client &c) {
+                                     return c.window == focused_window;
+                                   }),
+                    clients->end());
       // Update master window if needed
       if (focused_window == current_workspace->master) {
         current_workspace->master = None;
@@ -185,26 +191,27 @@ void move_window_to_workspace(const Arg *arg) {
   auto it = std::remove_if(
       current_clients.begin(), current_clients.end(),
       [=](Client &client) { return client.window == focused_window; });
-  if (it != current_clients.end()) {
+  if (it != current_clients.end() && !it->sticky) { // prevent sticky windows
+
     current_clients.erase(it, current_clients.end());
-  }
 
-  // Add window to the target workspace
-  XWindowAttributes wa;
-  XGetWindowAttributes(display, focused_window, &wa);
+    // Add window to the target workspace
+    XWindowAttributes wa;
+    XGetWindowAttributes(display, focused_window, &wa);
 
-  (*workspaces)[target_workspace].clients.push_back(
-      {focused_window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
-       static_cast<unsigned int>(wa.height), false});
-  XUnmapWindow(display, focused_window);
-  if (focused_window == current_workspace->master) {
-    current_workspace->master = None;
-    if (current_clients.size() > 0) {
-      current_workspace->master = current_clients[0].window;
+    (*workspaces)[target_workspace].clients.push_back(
+        {focused_window, wa.x, wa.y, static_cast<unsigned int>(wa.width),
+         static_cast<unsigned int>(wa.height), false});
+    XUnmapWindow(display, focused_window);
+    if (focused_window == current_workspace->master) {
+      current_workspace->master = None;
+      if (current_clients.size() > 0) {
+        current_workspace->master = current_clients[0].window;
+      }
     }
+    focused_window = None;
+    arrange_windows();
   }
-  focused_window = None;
-  arrange_windows();
 }
 void toggle_floating(const Arg *arg) {
   if (focused_window == None)
@@ -212,8 +219,9 @@ void toggle_floating(const Arg *arg) {
 
   Client *client = find_client(focused_window);
 
-  if (client && !client->fullscreen) {
-    // Toggle the floating status of the focused window
+  if (client && !client->fullscreen && !client->sticky) {
+    // furcing sticky windows to be floating
+    //  Toggle the floating status of the focused window
     client->floating = !client->floating;
     if (client->window == current_workspace->master) {
       current_workspace->master = None;
@@ -530,6 +538,10 @@ void resizemouse(const Arg *arg) {
   XEvent ev;
   Time lastMotionTime = 0;
 
+  if (!client || client->fullscreen ||
+      current_workspace->layout ==
+          1) // no support for resizing fullscreen windows by mouse or moncole
+    return;
   if (client->fullscreen ||
       current_workspace->layout ==
           1) // no support for resizing fullscreen windows by mouse or moncole
@@ -599,7 +611,6 @@ void resizemouse(const Arg *arg) {
 
   while (XCheckMaskEvent(display, EnterWindowMask, &ev))
     ;
-
   /* if ((activeMonitor = recttomon(client->x, client->y, client->w, client->h))
    * != */
   /*     selmon) { */
@@ -607,4 +618,56 @@ void resizemouse(const Arg *arg) {
   /*   selmon = activeMonitor; */
   /*   focus(NULL); */
   /* } */
+}
+void toggle_sticky(const Arg *arg) {
+
+  if (focused_window == None)
+    return;
+  Client *c = find_client(focused_window);
+  if (c) {
+    Client client = *c;
+    if (client.sticky) {
+      auto it = std::remove_if(sticky->begin(), sticky->end(), [&](Client &c) {
+        return c.window == focused_window;
+      });
+      client.sticky = false;
+      client.floating = false;
+      current_workspace->clients.push_back(client);
+      if (it != sticky->end())
+        sticky->erase(it);
+      /* XUnmapWindow(display, focused_window); */
+    } else {
+      auto it =
+          std::remove_if(clients->begin(), clients->end(),
+                         [&](Client &c) { return c.window == focused_window; });
+      if (!client.floating) { // if we are no resizing the window
+                              // center the window
+        client.floating = true;
+        client.x = current_monitor->x + (current_monitor->width) / 4;
+        client.y = current_monitor->y + (current_monitor->height) / 4;
+        client.width = current_monitor->width / 2;
+        client.height = current_monitor->height / 2;
+
+        XMoveResizeWindow(display, client.window, client.x, client.y,
+                          client.width, client.height);
+      }
+      client.sticky = true;
+      // and set borders
+      XSetWindowBorderWidth(
+          display, focused_window,
+          BORDER_WIDTH); // Set border width for floating windows */
+
+      // Ensure the floating window is raised above other windows
+      XRaiseWindow(display, focused_window);
+      // Rearrange windows after toggling floating
+
+      movement_warp(&focused_window);
+      if (current_workspace->master == focused_window)
+        current_workspace->master = None;
+      sticky->push_back(client);
+      if (it != clients->end())
+        clients->erase(it);
+    }
+    arrange_windows();
+  }
 }

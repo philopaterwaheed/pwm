@@ -42,6 +42,7 @@ struct Client {
   unsigned int width, height;
   bool floating = false;   // Indicates whether the window is floating or tiled
   bool fullscreen = false; // Full-screen flag
+  bool sticky = false;     // sticky flag
   float cfact = 1;         // Size factor relative to other clients
 };
 
@@ -111,6 +112,7 @@ void focus_previous_monitor(const Arg *arg);
 void change_master_width(const Arg *arg) ;
 void movemouse(const Arg *arg) ;
 void resizemouse(const Arg *arg) ;
+void toggle_sticky(const Arg *arg) ;
 // ///
 // event handlers
 void handle_focus_in(XEvent *e);

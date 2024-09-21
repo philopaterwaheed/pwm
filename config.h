@@ -11,7 +11,7 @@
 #define NUM_LAYOUTS 4
 #define BORDER_WIDTH 1 // Width of the window border in pixels
 
-static const unsigned int snap      = 32;       /* snap pixel */
+static const unsigned int snap = 32; /* snap pixel */
 static float master_size = .6;
 // all about the bar
 static bool SHOW_BAR = true; // Whether to show the bar or not
@@ -56,6 +56,7 @@ struct Monitor {
   int x, y, screen;
   unsigned int width, height;
   std::vector<Workspace> workspaces = std::vector<Workspace>(NUM_WORKSPACES);
+  std::vector<Client> sticky ;
   Workspace *current_workspace = NULL;
   Window bar;
 };
@@ -84,6 +85,7 @@ static std::vector<shortcut> shortcuts = {
     {MOD, XK_F1, lunch, {.v = briup}},
     {MOD, XK_F2, lunch, {.v = bridown}},
     {MOD, XK_Return, toggle_fullscreen, {0}},
+    {MOD, XK_s, toggle_sticky, {0}},
     {MOD, XK_b, toggle_bar, {0}},
     {MOD, XK_Right, resize_focused_window_x, {.i = +20}},
     {MOD, XK_Left, resize_focused_window_x, {.i = -20}},
@@ -115,10 +117,9 @@ static std::vector<shortcut> shortcuts = {
     WORKSPACEKEYS(XK_5, 5),
 
 };
-static const Button buttons[] =
-    {
-        //event mask      button          function argument */
-	{MOD, Button1, movemouse, {0}},
-        {MOD, Button2, toggle_floating, {0}},
-        {MOD, Button3, resizemouse, {21}},
+static const Button buttons[] = {
+    // event mask      button          function argument */
+    {MOD, Button1, movemouse, {0}},
+    {MOD, Button2, toggle_floating, {0}},
+    {MOD, Button3, resizemouse, {21}},
 };
