@@ -21,6 +21,7 @@ Monitor *current_monitor = nullptr; // The monitor in focus
 std::vector<Workspace> *workspaces;
 Workspace *current_workspace;
 std::vector<Client> *clients;
+std::vector<Client> *sticky;
 
 std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
@@ -41,11 +42,22 @@ int errorHandler(Display *display, XErrorEvent *errorEvent) {
 }
 // Find a client by its window id and return a pointer to it
 Client *find_client(Window w) {
-  for (auto &client : *clients) {
-    if (client.window == w) {
-      return &client;
+  for (auto &m : monitors) {
+    for (auto &client : m.workspaces[current_monitor->at]
+                            .clients) { // i really don't why
+                                        // i need this insted of
+                                        // current_workspace but that what works
+      if (client.window == w) {
+        return &client;
+      }
+    }
+    for (auto &client : m.sticky) {
+      if (client.window == w) {
+        return &client;
+      }
     }
   }
+
   return nullptr;
 }
 
@@ -104,7 +116,9 @@ void update_bar() {
                      DefaultGC(display, DefaultScreen(display)), x, 0,
                      BUTTONS_WIDTH, current_workspace->bar_height);
     }
-    std::string button_label = std::to_string(find_monitor_index(current_monitor)); //workspaces_names[i];
+    std::string button_label =
+        std::to_string(clients->size()) + " " +
+        std::to_string(sticky->size()); // workspaces_names[i];
     draw_text_with_dynamic_font(display, current_monitor->bar, xft_draw,
                                 &xft_color, button_label.c_str(), x + 10, 15,
                                 XDefaultScreen(display),
@@ -380,8 +394,9 @@ void grid_windows(std::vector<Client *> *clients, int master_width,
     XSetWindowBorderWidth(display, client->window,
                           BORDER_WIDTH); // Set border Width
 
-    XLowerWindow(display,
-                 client->window); // Lower windows to avoid overlap with floaters
+    XLowerWindow(
+        display,
+        client->window); // Lower windows to avoid overlap with floaters
     i++;
   }
 }
@@ -532,6 +547,7 @@ void detect_monitors() {
     workspaces = &current_monitor->workspaces;
     current_workspace = &(*workspaces)[0];
     clients = &(*workspaces)[0].clients;
+    sticky = &(current_monitor->sticky);
   }
 }
 Monitor *find_monitor_for_window(int x, int y) {
@@ -577,6 +593,7 @@ void focus_monitor(Monitor *monitor) {
            ->workspaces[current_monitor->at]; // really don't know wht i need
                                               // this but it's what it is
   clients = &current_workspace->clients;
+  sticky = &(current_monitor->sticky);
   focused_window = None;
   update_bar();
   warp(NULL);

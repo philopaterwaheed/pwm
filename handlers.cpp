@@ -12,6 +12,7 @@ extern std::vector<Monitor> monitors; // List of monitors
 extern std::vector<Workspace> *workspaces;
 extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
+extern std::vector<Client> *sticky;
 extern std::string status;
 void handle_button_press_event(XEvent *e) {
     XButtonPressedEvent *ev = &e->xbutton; 
@@ -145,6 +146,10 @@ void handle_destroy_notify(XEvent *e) {
       std::remove_if(clients->begin(), clients->end(),
                      [&window](const Client &c) { return c.window == window; }),
       clients->end());
+  sticky->erase(
+      std::remove_if(sticky->begin(), sticky->end(),
+                     [&window](const Client &c) { return c.window == window; }),
+      sticky->end());
   if (window == current_workspace->master) {
     current_workspace->master = None;
   }
