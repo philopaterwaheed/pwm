@@ -282,24 +282,11 @@ void toggle_bar(const Arg *arg) {
   arrange_windows();
 }
 void toggle_fullscreen(const Arg *arg) {
-  // todo fix the fullscreen on proebrty change
-  auto client = find_client(focused_window);
+  Client *client = find_client(focused_window);
   if (!client)
     return;
-
-  if (!client->fullscreen) {
-    client->fullscreen = true;
-    make_fullscreen(client, current_monitor->width, current_monitor->height);
-  } else {
-    // Exit full-screen and restore the original size and position
-    XMoveResizeWindow(display, client->window, client->x, client->y,
-                      client->width, client->height);
-
-    // Restore the window border
-    XSetWindowBorderWidth(display, client->window, BORDER_WIDTH);
-
-    client->fullscreen = false;
-  }
+  if (!client->sticky)
+    set_fullscreen(client, !client->fullscreen);
 }
 /* void lunch(const Arg *arg) { */
 /*   char **args = (char **)arg->v; */
