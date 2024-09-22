@@ -411,16 +411,16 @@ void center_master_windows(std::vector<Client *> *clients, int master_width,
         make_fullscreen(c, screen_width, screen_height, false);
         break; // Exit after handling the single window
       }
+      int x = current_monitor->x + (screen_width - master_width) / 2;
+      int y = current_monitor->y + current_workspace->bar_height + GAP_SIZE;
+      int height = screen_height - current_workspace->bar_height - 2 * GAP_SIZE;
+      int width = master_width - 2 * GAP_SIZE;
       // Position master window
-      XMoveResizeWindow(display, c->window,
-                        current_monitor->x + (screen_width - master_width) /
-                                                 2, // Centered horizontally
-                        current_monitor->y + current_workspace->bar_height +
-                            GAP_SIZE, // Position adjusted for bar and gap
-                        master_width, // Master width
-                        screen_height - current_workspace->bar_height -
-                            2 * GAP_SIZE // Height adjusted for bar and gaps
-      );
+      XMoveResizeWindow(display, c->window, x, y, width, height);
+      c->x = x;
+      c->y = y;
+      c->width = width;
+      c->height = height;
     } else { // Tiled windows
       if (tiled_index < left_clients) {
         // Position for left side of the master
@@ -593,8 +593,7 @@ void arrange_windows() {
       if (client.window != current_workspace->master)
         current_workspace->cfacts += client.cfact;
       arranged_clients.push_back(&client);
-
-    } 
+    }
     if (client.fullscreen) {
       fullscreen_clients.push_back(&client);
     }

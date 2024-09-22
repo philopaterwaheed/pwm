@@ -99,20 +99,63 @@ void move_focused_window_y(const Arg *arg) {
   }
 }
 void swap_window(const Arg *arg) {
-  int index1 = get_focused_window_index(), index2 = index1 + arg->i;
-  index2 = index2 < 0 ? clients->size() - 1 : index2;
-  index2 = index2 >= clients->size() ? 0 : index2;
+ int index1 = get_focused_window_index();
+  int index2 = index1 + arg->i;
+  // Wrap index2 within the valid range
+  index2 = (index2 < 0) ? clients->size() - 1 : index2 % clients->size();
+  // Ensure both indices are valid
   if (index1 < clients->size() && index2 < clients->size()) {
-    // if one of them is the master and we didn't ccheck the master will not
-    // change postions
-    if ((*clients)[index2].window == current_workspace->master) {
-      current_workspace->master = (*clients)[index1].window;
-    } else if ((*clients)[index1].window == current_workspace->master)
-      current_workspace->master = (*clients)[index2].window;
-
-    std::swap((*clients)[index1], (*clients)[index2]);
-    movement_warp(&focused_window);
-    arrange_windows(); // Rearrange windows after swapping
+    // Update master window if necessary
+    if (current_workspace->master == clients->at(index1).window) {
+      current_workspace->master = clients->at(index2).window;
+    } else if (current_workspace->master == clients->at(index2).window) {
+      current_workspace->master = clients->at(index1).window;
+    }
+    std::swap(clients->at(index1).window, clients->at(index2).window);
+    Client *client1 = &clients->at(index1);
+    if (client1->floating) {
+      XMoveResizeWindow(display, client1->window, client1->x, client1->y,
+                        client1->width, client1->height);
+      // Set border width for floating windows
+      XSetWindowBorderWidth(display, client1->window, 2);
+      // Ensure the floating window is raised above others
+      XRaiseWindow(display, client1->window);
+    }
+    Client *client2 = &clients->at(index2);
+    if (client2->floating) {
+      XMoveResizeWindow(display, client2->window, client2->x, client2->y,
+                        client2->width, client2->height);
+      XSetWindowBorderWidth(display, client2->window, 2);
+      XRaiseWindow(display, client2->window);
+    }
+    arrange_windows();
+    // Warp to the new client
+    if (client2->window ==
+        current_workspace->master) // they may seem redudndant but if the window
+                                   // becomes master after swap without this if
+                                   // it does't warp for some reason
+      movement_warp(&current_workspace->master);
+    else
+      warp(client2);
+  }
+}
+void change_focused_window(const Arg *arg) {
+  int index1 = get_focused_window_index();
+  int index2 = index1 + arg->i;
+  // Wrap index2 within the valid range
+  index2 = (index2 < 0) ? clients->size() - 1 : index2 % clients->size();
+  // Ensure both indices are valid
+  if (index1 < clients->size() && index2 < clients->size()) {
+    // Warp to the new client
+    Client *client = &clients->at(index2);
+    focused_window = client->window;
+    if (client->window ==
+        current_workspace->master) // they may seem redudndant but if the window
+                                   // becomes master after swap without this if
+                                   // it does't warp for some reason
+      movement_warp(&current_workspace->master);
+    else
+      warp(client);
   }
 }
 void kill_focused_window(const Arg *arg) {
