@@ -195,3 +195,4 @@ static void (*handler[LASTEvent])(XEvent *);
 
 void updatewindowtype(Client *c) ;
 Atom getatomprop(Client *c, Atom prop) ;
+void change_focused_window(const Arg *arg) ;

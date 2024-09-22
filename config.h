@@ -56,7 +56,7 @@ struct Monitor {
   int x, y, screen;
   unsigned int width, height;
   std::vector<Workspace> workspaces = std::vector<Workspace>(NUM_WORKSPACES);
-  std::vector<Client> sticky ;
+  std::vector<Client> sticky;
   Workspace *current_workspace = NULL;
   Window bar;
 };
@@ -87,20 +87,22 @@ static std::vector<shortcut> shortcuts = {
     {MOD, XK_Return, toggle_fullscreen, {0}},
     {MOD, XK_s, toggle_sticky, {0}},
     {MOD, XK_b, toggle_bar, {0}},
-    {MOD, XK_Right, resize_focused_window_x, {.i = +20}},
-    {MOD, XK_Left, resize_focused_window_x, {.i = -20}},
-    {MOD, XK_Down, resize_focused_window_y, {.i = +20}},
-    {MOD, XK_Up, resize_focused_window_y, {.i = -20}},
+    {MOD, XK_Right, move_focused_window_x, {.i = +20}},
+    {MOD, XK_Left, move_focused_window_x, {.i = -20}},
+    {MOD, XK_Down, move_focused_window_y, {.i = +20}},
+    {MOD, XK_Up, move_focused_window_y, {.i = -20}},
     {MOD, XK_l, change_master_width, {.f = +.05}},
     {MOD, XK_h, change_master_width, {.f = -.05}},
     {MOD, XK_comma, focus_next_monitor, {0}},
     {MOD, XK_period, focus_previous_monitor, {0}},
+    {MOD, XK_j, change_focused_window, {.i = +1}},
+    {MOD, XK_k, change_focused_window, {.i = -1}},
     {MOD | SHIFT, XK_q, exit_pwm, {0}},
     {MOD | SHIFT, XK_space, toggle_floating, {0}},
-    {MOD | SHIFT, XK_Right, move_focused_window_x, {.i = +20}},
-    {MOD | SHIFT, XK_Left, move_focused_window_x, {.i = -20}},
-    {MOD | SHIFT, XK_Down, move_focused_window_y, {.i = +20}},
-    {MOD | SHIFT, XK_Up, move_focused_window_y, {.i = -20}},
+    {MOD | SHIFT, XK_Right, resize_focused_window_x, {.i = +20}},
+    {MOD | SHIFT, XK_Left, resize_focused_window_x, {.i = -20}},
+    {MOD | SHIFT, XK_Down, resize_focused_window_y, {.i = +20}},
+    {MOD | SHIFT, XK_Up, resize_focused_window_y, {.i = -20}},
     {MOD | SHIFT, XK_j, swap_window, {.i = +1}},
     {MOD | SHIFT, XK_k, swap_window, {.i = -1}},
     {MOD | SHIFT, XK_l, change_focused_window_cfact, {.f = +.05}},
