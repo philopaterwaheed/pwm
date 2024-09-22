@@ -77,6 +77,34 @@ struct Button {
 };
 
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor states*/
+enum {
+  WMProtocols,
+  WMDelete,
+  /* WMState, */
+  /* WMTakeFocus, */
+  WMLast
+}; /* default atoms */
+enum {
+  /* NetSupported, */
+  NetWMName,
+  NetWMState,
+  /* NetWMCheck, */
+  NetWMFullscreen,
+  /* NetWMSticky, */
+  /* NetActiveWindow, */
+  NetWMWindowType,
+  NetWMWindowTypeDialog,
+  NetWMWindowTypeToolbar,
+  NetWMWindowTypeUtility,
+  NetClientList,
+  NetClientInfo,
+  NetLast
+}; /* EWMH atoms */
+
+static Atom wmatom[WMLast], netatom[NetLast];
+
+
+
 Client *find_client(Window w);
 int get_focused_window_index();
 void tile_windows(std::vector<Client *> *clients, int master_width,
@@ -121,11 +149,13 @@ void handle_enter_notify(XEvent *e);
 void handle_map_request(XEvent *e);
 void handle_configure_request(XEvent *e);
 void handle_key_press(XEvent *e);
-void handle_key_press(XEvent *e);
+void handle_property_notify(XEvent *e);
 void handle_button_press_event(XEvent *e);
 void handle_motion_notify(XEvent *e);
 void handle_destroy_notify(XEvent *e) ;
-void handle_destroy_notify(XEvent *e) ;
+void handle_client_message(XEvent *e) ;
+void handle_client_message(XEvent *e) ;
+void nothing(XEvent *e) ;
 // font functions
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
@@ -160,3 +190,8 @@ void setup();
 int getrootptr(int *x, int *y) ;
 void configure(Client *c) ;
 void resizeclient(Client *c, int x, int y, int w, int h) ;
+void set_fullscreen(Client *client, bool full_screen) ;
+static void (*handler[LASTEvent])(XEvent *);
+
+void updatewindowtype(Client *c) ;
+Atom getatomprop(Client *c, Atom prop) ;

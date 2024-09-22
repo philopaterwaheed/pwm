@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <string>
 
+Atom state_atom, fullscreen_atom;
+
 Display *display; // the connection to the X server
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
@@ -170,41 +172,8 @@ void warp(const Client *c) {
 void run() {
   XEvent ev;
   while (!XNextEvent(display, &ev)) {
-    switch (ev.type) {
-    case MapRequest:
-      // This event is sent when a window want to be mapped
-      handle_map_request(&ev);
-      break;
-    case ConfigureRequest:
-      // this event is sent when a window wants to change its size/position
-      handle_configure_request(&ev);
-      break;
-    case FocusIn:
-      handle_focus_in(&ev);
-      break;
-    case FocusOut:
-      handle_focus_out(&ev);
-      break;
-    case EnterNotify:
-      handle_enter_notify(&ev);
-      break;
-    case KeyPress:
-      handle_key_press(&ev);
-      break;
-    case PropertyNotify:
-      update_status(&ev);
-      update_bar();
-      break;
-    case ButtonPress:
-      handle_button_press_event(&ev);
-      break;
-    case MotionNotify:
-      handle_motion_notify(&ev);
-      break;
-    case DestroyNotify:
-      handle_destroy_notify(&ev);
-      break;
-    }
+    if (handler[ev.type])
+      handler[ev.type](&ev);
   }
 }
 
@@ -255,6 +224,7 @@ int main() {
     fprintf(stderr, "Cannot open display\n");
     exit(1);
   }
+  setup();
 
   struct sigaction sa;
 
@@ -284,7 +254,6 @@ int main() {
   XDefineCursor(display, root, cursor);
   // Capture key presses for the mod key (e.g., Mod4Mask) with any key
 
-  setup();
   detect_monitors();
   grab_keys();
   grabbuttons();
@@ -469,9 +438,9 @@ void center_master_windows(std::vector<Client *> *clients, int master_width,
 
       } else {
         // Position for right side of the master
-        y = last_y_right +
-            ((left_index != 0) + 1) *
-                (GAP_SIZE + (left_index != 0) * BORDER_WIDTH); // the starting y
+        y = last_y_right + ((right_index != 0) + 1) *
+                               (GAP_SIZE + (right_index != 0) *
+                                               BORDER_WIDTH); // the starting y
         stack_height = last_height_right =
             (c->cfact / right_factors) *
             ((screen_height - current_workspace->bar_height) -
@@ -625,7 +594,8 @@ void arrange_windows() {
         current_workspace->cfacts += client.cfact;
       arranged_clients.push_back(&client);
 
-    } else if (client.fullscreen) {
+    } 
+    if (client.fullscreen) {
       fullscreen_clients.push_back(&client);
     }
   }
@@ -685,23 +655,15 @@ bool wants_floating(Window win) {
   unsigned long nitems, bytes_after;
   unsigned char *data = NULL;
 
-  Atom net_wm_window_type = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
-  Atom net_wm_window_type_dialog =
-      XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-  Atom net_wm_window_type_toolbar =
-      XInternAtom(display, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
-  Atom net_wm_window_type_utility =
-      XInternAtom(display, "_NET_WM_WINDOW_TYPE_UTILITY", False);
-
   // Get the _NET_WM_WINDOW_TYPE property from the window
-  if (XGetWindowProperty(display, win, net_wm_window_type, 0, (~0L), False,
-                         XA_ATOM, &type, &format, &nitems, &bytes_after,
+  if (XGetWindowProperty(display, win, netatom[NetWMWindowType], 0, (~0L),
+                         False, XA_ATOM, &type, &format, &nitems, &bytes_after,
                          &data) == Success) {
     Atom *atoms = (Atom *)data;
     for (unsigned long i = 0; i < nitems; i++) {
-      if (atoms[i] == net_wm_window_type_dialog ||
-          atoms[i] == net_wm_window_type_toolbar ||
-          atoms[i] == net_wm_window_type_utility) {
+      if (atoms[i] == netatom[NetWMWindowTypeDialog] ||
+          atoms[i] == netatom[NetWMWindowTypeToolbar] ||
+          atoms[i] == netatom[NetWMWindowTypeUtility]) {
         XFree(data);
         return true; // Floating window (e.g., dialog, toolbar, or utility)
       }
@@ -715,10 +677,11 @@ bool wants_floating(Window win) {
 /* { */
 /* 	xerrorxlib = XSetErrorHandler(xerrorstart); */
 /* 	 this causes an error if some other window manager is running */
-/* 	XSelectInput(dpy, DefaultRootWindow(dpy), SubstructureRedirectMask); */
-/* 	XSync(dpy, False); */
+/* 	XSelectInput(display, DefaultRootWindow(display),
+ * SubstructureRedirectMask); */
+/* 	XSync(display, False); */
 /* 	XSetErrorHandler(xerror); */
-/* 	XSync(dpy, False); */
+/* 	XSync(display, False); */
 /* } */
 void movement_warp(Window *win) {
   XWindowAttributes wa;
@@ -733,9 +696,42 @@ void grabbuttons() {
                 BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
 }
 void setup() {
+  // init atoms
+  state_atom = XInternAtom(display, "_NET_WM_STATE", False);
+  fullscreen_atom = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
+  wmatom[WMProtocols] = XInternAtom(display, "WM_PROTOCOLS", False);
+  wmatom[WMDelete] = XInternAtom(display, "WM_DELETE_WINDOW", False);
+  netatom[NetWMFullscreen] =
+      XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
+  netatom[NetWMWindowType] = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+  netatom[NetWMState] = XInternAtom(display, "_NET_WM_STATE", False);
+  netatom[NetWMWindowTypeDialog] =
+      XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+  netatom[NetClientList] = XInternAtom(display, "_NET_CLIENT_LIST", False);
+  netatom[NetClientInfo] = XInternAtom(display, "_NET_CLIENT_INFO", False);
+  netatom[NetWMWindowTypeToolbar] =
+      XInternAtom(display, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
+  netatom[NetWMWindowTypeDialog] =
+      XInternAtom(display, "_NET_WM_WINDOW_TYPE_UTILITY", False);
+  // initing cursors
   cursors[CurNormal] = cur_create(XC_left_ptr);
   cursors[CurResize] = cur_create(XC_sizing);
   cursors[CurMove] = cur_create(XC_fleur);
+  // initing handlers
+  handler[ButtonPress] = handle_button_press_event;
+  handler[ClientMessage] = handle_client_message;
+  handler[ConfigureRequest] = handle_configure_request;
+  handler[ConfigureNotify] = nothing; // Assuming nothing is defined correctly
+  handler[DestroyNotify] = handle_destroy_notify;
+  handler[EnterNotify] = handle_enter_notify;
+  handler[Expose] = nothing; // Assuming nothing is defined correctly
+  handler[FocusIn] = handle_focus_in;
+  handler[KeyPress] = handle_key_press;
+  handler[MappingNotify] = nothing; // Assuming nothing is defined correctly
+  handler[MapRequest] = handle_map_request;
+  handler[MotionNotify] = handle_motion_notify;
+  handler[PropertyNotify] = handle_property_notify;
+  handler[UnmapNotify] = nothing; // Fixed spelling from "nothin" to "nothing"
 }
 int getrootptr(int *x, int *y) {
   int di;
@@ -771,4 +767,52 @@ void configure(Client *c) {
   ce.above = None;
   ce.override_redirect = False;
   XSendEvent(display, c->window, False, StructureNotifyMask, (XEvent *)&ce);
+}
+void set_fullscreen(Client *client, bool full_screen) {
+  if (!client)
+    return;
+
+  if (!client->fullscreen && full_screen) {
+    XChangeProperty(display, client->window, netatom[NetWMState], XA_ATOM, 32,
+                    PropModeReplace, (unsigned char *)&netatom[NetWMFullscreen],
+                    1);
+    client->fullscreen = true;
+    make_fullscreen(client, current_monitor->width, current_monitor->height);
+  } else if (client->fullscreen && !full_screen) {
+    // Exit full-screen and restore the original size and position
+    XChangeProperty(display, client->window, netatom[NetWMState], XA_ATOM, 32,
+                    PropModeReplace, (unsigned char *)0, 0);
+    XMoveResizeWindow(display, client->window, client->x, client->y,
+                      client->width, client->height);
+
+    // Restore the window border
+    XSetWindowBorderWidth(display, client->window, BORDER_WIDTH);
+
+    client->fullscreen = false;
+  }
+  focused_window = client->window;
+}
+Atom getatomprop(Client *c, Atom prop) {
+  int di;
+  unsigned long dl;
+  unsigned char *p = NULL;
+  Atom da, atom = None;
+
+  if (XGetWindowProperty(display, c->window, prop, 0L, sizeof atom, False,
+                         XA_ATOM, &da, &di, &dl, &dl, &p) == Success &&
+      p) {
+    atom = *(Atom *)p;
+    XFree(p);
+  }
+  return atom;
+}
+
+void updatewindowtype(Client *c) {
+  Atom state = getatomprop(c, netatom[NetWMState]);
+  Atom wtype = getatomprop(c, netatom[NetWMWindowType]);
+
+  if (state == netatom[NetWMFullscreen])
+    set_fullscreen(c, 1);
+  if (wtype == netatom[NetWMWindowTypeDialog])
+    c->floating = 1;
 }

@@ -2,6 +2,7 @@
 #include "config.h"
 #include "main.h"
 #include <X11/Xlib.h>
+#include <string>
 
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
@@ -14,16 +15,18 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Client> *sticky;
 extern std::string status;
+extern Atom state_atom; // i don't know why I need those but they don't work in
+                        // the array
+extern Atom fullscreen_atom;
 void handle_button_press_event(XEvent *e) {
-    XButtonPressedEvent *ev = &e->xbutton; 
-for (auto button : buttons) {
-	if (e->xbutton.button == button.id && CLEANMASK(ev->state) == CLEANMASK(button.mask) &&
-		button.func){
-	  button.func(&(button.arg));
-	  return;
-	}
-
-}
+  XButtonPressedEvent *ev = &e->xbutton;
+  for (auto button : buttons) {
+    if (e->xbutton.button == button.id &&
+        CLEANMASK(ev->state) == CLEANMASK(button.mask) && button.func) {
+      button.func(&(button.arg));
+      return;
+    }
+  }
   int x = e->xbutton.x;
   int y = e->xbutton.y;
 
@@ -84,12 +87,13 @@ void handle_map_request(XEvent *e) {
     current_workspace->master = clients->back().window;
   focused_window = clients->back().window;
   arrange_windows();
-  XSelectInput(display, ev->window, EnterWindowMask | FocusChangeMask);
+  XSelectInput(display, ev->window,
+               EnterWindowMask | FocusChangeMask | PropertyChangeMask);
   XMapWindow(display, ev->window);
   // Set border width
   XSetWindowBorderWidth(display, ev->window, BORDER_WIDTH);
   // Set initial border color (unfocused)
-  // we map afterarrange for  redusing visual glitchs 
+  // we map afterarrange for  redusing visual glitchs
 }
 
 void handle_configure_request(XEvent *e) {
@@ -157,4 +161,34 @@ void handle_destroy_notify(XEvent *e) {
 
   focused_window = None;
   arrange_windows();
+}
+void handle_property_notify(XEvent *e) {
+
+  XPropertyEvent *ev = &e->xproperty;
+  if (ev->atom == XA_WM_NAME || ev->atom == netatom[NetWMName]) {
+    update_status(e);
+    update_bar();
+  }
+  if (ev->atom == netatom[NetWMWindowType]) {
+    Client *c = find_client(ev->window);
+    updatewindowtype(c);
+  }
+}
+void handle_client_message(XEvent *e) {
+  XClientMessageEvent *cm = &e->xclient;
+  if (cm->message_type == state_atom) {
+    Client *c = find_client(cm->window);
+    if (c) { // Ensure the client was found
+      if (cm->data.l[1] == fullscreen_atom ||
+          cm->data.l[2] == fullscreen_atom) {
+        bool should_fullscreen =
+            (cm->data.l[0] == 1) || (cm->data.l[0] == 2 && !c->fullscreen);
+        set_fullscreen(c, should_fullscreen);
+        focused_window = c->window;
+      }
+    }
+  }
+}
+void nothing(XEvent *e) {
+  // just a placehodler for events we don't handle
 }
