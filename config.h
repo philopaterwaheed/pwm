@@ -74,7 +74,7 @@ static const char col_cyan[] = "#282A36";
 static const char *term[] = {"st", NULL};
 static const char *bridown[] = {"sudo", "brillo", "-q", "-U", "5", NULL};
 static const char *briup[] = {"sudo", "brillo", "-q", "-A", "5", NULL};
-static const char *s_shot[] = {"thuNAR", NULL}; // for screenshots
+static const char *s_shot[] = {"flameshot" , "gui", NULL}; // for screenshots
 static const char *dmenucmd[] = {
     "dmenu_run", "-m",      "0",   "-fn",    dmenufont, "-nb",     col_gray1,
     "-nf",       col_gray3, "-sb", col_cyan, "-sf",     col_gray4, NULL};
