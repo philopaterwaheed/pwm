@@ -128,7 +128,7 @@ void update_bar() {
     }
     draw_text_with_dynamic_font(display, current_monitor->bar,
                                 current_monitor->xft_draw, &xft_color,
-                                BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] ,
+                                BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] / 3,
                                 BAR_Y, screen, current_monitor->width);
   }
   XftChar8 *status_utf8 =
