@@ -15,9 +15,13 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Client> *sticky;
 extern std::string status;
-extern Atom state_atom; // i don't know why I need those but they don't work in
-                        // the array
+extern Atom state_atom, fullscreen_atom, delete_atom, protocol_atom, type_atom,utility_atom,name_atom,
+    toolbar_atom, client_list_atom, client_info_atom, dialog_atom;
 extern Atom fullscreen_atom;
+extern int BUTTONS_WIDTHS[NUM_WORKSPACES + 1];
+extern int BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES +
+                          1]; // a presum array for button widths
+
 void handle_button_press_event(XEvent *e) {
   XButtonPressedEvent *ev = &e->xbutton;
   for (auto button : buttons) {
@@ -30,15 +34,20 @@ void handle_button_press_event(XEvent *e) {
   int x = e->xbutton.x;
   int y = e->xbutton.y;
 
+  int button_index = -1 ;
   // Determine which button was clicked
-  int button_index = x / BUTTONS_WIDTH;
-  if (button_index >= 0 && y <= BAR_HEIGHT * (current_workspace->show_bar) &&
+  for (int i = 1; i < NUM_WORKSPACES+1 ; i++){
+    if (x>=BUTTONS_WIDTHS_PRESUM[i-1] && x<=BUTTONS_WIDTHS_PRESUM[i]){
+    		  button_index = i-1;
+    		  break;
+    	  }
+  }
+  if ( button_index>= 0 && y <= BAR_HEIGHT * (current_workspace->show_bar) &&
       button_index < NUM_WORKSPACES) {
     switch_workspace(new (Arg){.i = button_index + 1});
     update_bar();
-  } else if (button_index >= 0 &&
-             y <= BAR_HEIGHT * (current_workspace->show_bar) &&
-             button_index == NUM_WORKSPACES + 1) {
+  } else if (x >= BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES] && x<= BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES]+BUTTONS_WIDTHS[NUM_WORKSPACES]&&
+             y <= BAR_HEIGHT * (current_workspace->show_bar)) {
     toggle_layout();
   }
 }
@@ -165,11 +174,11 @@ void handle_destroy_notify(XEvent *e) {
 void handle_property_notify(XEvent *e) {
 
   XPropertyEvent *ev = &e->xproperty;
-  if (ev->atom == XA_WM_NAME || ev->atom == netatom[NetWMName]) {
+  if (ev->atom == XA_WM_NAME || ev->atom == name_atom) {
     update_status(e);
     update_bar();
   }
-  if (ev->atom == netatom[NetWMWindowType]) {
+  if (ev->atom == type_atom) {
     Client *c = find_client(ev->window);
     updatewindowtype(c);
   }

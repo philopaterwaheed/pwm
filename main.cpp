@@ -2,18 +2,20 @@
 #include "main.h"
 #include "config.h"
 #include <X11/X.h>
+#include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
 #include <cstdlib>
 #include <string>
 
-Atom state_atom, fullscreen_atom;
+Atom state_atom, fullscreen_atom, delete_atom, protocol_atom, type_atom,
+    name_atom, utility_atom, toolbar_atom, client_list_atom, client_info_atom,
+    dialog_atom;
 
 Display *display; // the connection to the X server
+int screen;
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
 Window focused_window = None;
-XftFont *xft_font;
-XftDraw *xft_draw;
 XftColor xft_color;
 extern Cursor cursors[3];
 
@@ -27,6 +29,15 @@ std::vector<Client> *sticky;
 
 std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
+
+extern XftFont *xft_font;
+
+// to store button widths and utf8 strings
+int BUTTONS_WIDTHS[NUM_WORKSPACES + 1];
+int BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES +
+                          1]; // a presum array for button widths
+XftChar8 *BUTTON_LABEL_UTF8[NUM_WORKSPACES];
+
 int errorHandler(Display *display, XErrorEvent *errorEvent) {
   std::cerr << "Xlib Error: ";
   switch (errorEvent->error_code) {
@@ -78,19 +89,17 @@ void create_bars() {
                  monitor.bar); // we create and don't show for future errors
     }
     // Load the font using Xft
-    xft_font =
-        XftFontOpenName(display, DefaultScreen(display), BAR_FONT.c_str());
 
     // Create a drawable for the bar
-    xft_draw = XftDrawCreate(display, monitor.bar,
-                             DefaultVisual(display, DefaultScreen(display)),
-                             DefaultColormap(display, DefaultScreen(display)));
 
     // Set the color for drawing text (white in this case)
     XRenderColor render_color = {0xffff, 0xffff, 0xffff, 0xffff}; // White color
     XftColorAllocValue(display, DefaultVisual(display, DefaultScreen(display)),
                        DefaultColormap(display, DefaultScreen(display)),
                        &render_color, &xft_color);
+    monitor.xft_draw = XftDrawCreate(
+        display, monitor.bar, DefaultVisual(display, DefaultScreen(display)),
+        DefaultColormap(display, DefaultScreen(display)));
   }
 }
 void update_bar() {
@@ -109,31 +118,40 @@ void update_bar() {
 
   // Draw workspace buttons
   for (int i = 0; i < NUM_WORKSPACES; ++i) {
-    int x = i * BUTTONS_WIDTH;
+    int x = BUTTONS_WIDTHS_PRESUM[i];
     // Highlight the current workspace button
     if (i == current_workspace->index) {
       XSetForeground(display, DefaultGC(display, DefaultScreen(display)),
                      0x3399FF); // Light blue background
-      XFillRectangle(display, current_monitor->bar,
-                     DefaultGC(display, DefaultScreen(display)), x, 0,
-                     BUTTONS_WIDTH, current_workspace->bar_height);
+      XFillRectangle(display, current_monitor->bar, DefaultGC(display, screen),
+                     x, 0, BUTTONS_WIDTHS[i], current_workspace->bar_height);
     }
-    std::string button_label =
-        std::to_string(clients->size()) + " " +
-        std::to_string(sticky->size()); // workspaces_names[i];
-    draw_text_with_dynamic_font(display, current_monitor->bar, xft_draw,
-                                &xft_color, button_label.c_str(), x + 10, 15,
-                                XDefaultScreen(display),
-                                current_monitor->width);
+    draw_text_with_dynamic_font(display, current_monitor->bar,
+                                current_monitor->xft_draw, &xft_color,
+                                BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] ,
+                                BAR_Y, screen, current_monitor->width);
   }
+  XftChar8 *status_utf8 =
+      reinterpret_cast<XftChar8 *>(const_cast<char *>(status.c_str()));
+
   draw_text_with_dynamic_font(
-      display, current_monitor->bar, xft_draw, &xft_color,
-      LAYOUTS[current_workspace->layout].name.c_str(),
-      (NUM_WORKSPACES)*BUTTONS_WIDTH + 10, 15, XDefaultScreen(display),
+      display, current_monitor->bar, current_monitor->xft_draw, &xft_color,
+      status_utf8, screen_width - get_utf8_string_width(display, status_utf8),
+      BAR_Y, screen, current_monitor->width);
+
+  XftChar8 *layout_name_utf8 = reinterpret_cast<XftChar8 *>(
+      const_cast<char *>(LAYOUTS[current_workspace->layout].name.c_str()));
+  XSetForeground(display, DefaultGC(display, screen),
+                 0x3399FF); // Light blue background
+  BUTTONS_WIDTHS[NUM_WORKSPACES] =
+      std::max(BUTTON_WIDTH, get_utf8_string_width(display, layout_name_utf8));
+  XFillRectangle(display, current_monitor->bar, DefaultGC(display, screen),
+                 BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES], 0,
+                 BUTTONS_WIDTHS[NUM_WORKSPACES], current_workspace->bar_height);
+  draw_text_with_dynamic_font(
+      display, current_monitor->bar, current_monitor->xft_draw, &xft_color,
+      layout_name_utf8, BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES], BAR_Y, screen,
       current_monitor->width); // to show the layout name of the workspaces
-  draw_text_with_dynamic_font(display, current_monitor->bar, xft_draw,
-                              &xft_color, status, 500, 15,
-                              XDefaultScreen(display), current_monitor->width);
 }
 
 // Get the index of the focused window
@@ -179,7 +197,7 @@ void run() {
 
 void update_status(XEvent *ev) {
 
-  if (ev->xproperty.atom == XInternAtom(display, "WM_NAME", False)) {
+  if (ev->xproperty.atom == name_atom) {
     /* // Update status text from xsetroot */
     XTextProperty name;
     char **list = nullptr;
@@ -209,8 +227,16 @@ void grab_keys() {
   }
 }
 void cleanup() {
+  XftColorFree(display, DefaultVisual(display, DefaultScreen(display)),
+               DefaultColormap(display, DefaultScreen(display)), &xft_color);
+
+  for (auto font : fallbackFonts) {
+    XftFontClose(display, font);
+  }
   XftFontClose(display, xft_font);
-  XftDrawDestroy(xft_draw);
+  for (auto m : monitors) {
+    XftDrawDestroy(m.xft_draw);
+  }
   XCloseDisplay(display);
 }
 
@@ -224,7 +250,6 @@ int main() {
     fprintf(stderr, "Cannot open display\n");
     exit(1);
   }
-  setup();
 
   struct sigaction sa;
 
@@ -249,11 +274,7 @@ int main() {
                    PointerMotionMask | EnterWindowMask | LeaveWindowMask |
                    StructureNotifyMask | PropertyChangeMask);
 
-  Cursor cursor =                    // not for future evry action needs a shape
-      XCreateFontCursor(display, 2); // Set the cursor for the window
-  XDefineCursor(display, root, cursor);
-  // Capture key presses for the mod key (e.g., Mod4Mask) with any key
-
+  setup();
   detect_monitors();
   grab_keys();
   grabbuttons();
@@ -629,11 +650,14 @@ void arrange_windows() {
   if (focused_window == None) {
     focused_window = current_workspace->master;
   }
-  warp(find_client(focused_window));
+  if (focused_window)
+    movement_warp(&focused_window);
+  else
+    movement_warp(&current_workspace->master);
 }
 void toggle_layout() {
-  if (current_workspace->layout == 1 &&
-      current_workspace->layout_index_place_holder == 1) {
+  if (!(current_workspace->layout == 1 &&
+        current_workspace->layout_index_place_holder == 1)) {
     std::swap(current_workspace->layout,
               current_workspace->layout_index_place_holder);
     arrange_windows();
@@ -655,14 +679,13 @@ bool wants_floating(Window win) {
   unsigned char *data = NULL;
 
   // Get the _NET_WM_WINDOW_TYPE property from the window
-  if (XGetWindowProperty(display, win, netatom[NetWMWindowType], 0, (~0L),
-                         False, XA_ATOM, &type, &format, &nitems, &bytes_after,
+  if (XGetWindowProperty(display, win, type_atom, 0, (~0L), False, XA_ATOM,
+                         &type, &format, &nitems, &bytes_after,
                          &data) == Success) {
     Atom *atoms = (Atom *)data;
     for (unsigned long i = 0; i < nitems; i++) {
-      if (atoms[i] == netatom[NetWMWindowTypeDialog] ||
-          atoms[i] == netatom[NetWMWindowTypeToolbar] ||
-          atoms[i] == netatom[NetWMWindowTypeUtility]) {
+      if (atoms[i] == dialog_atom || atoms[i] == toolbar_atom ||
+          atoms[i] == utility_atom) {
         XFree(data);
         return true; // Floating window (e.g., dialog, toolbar, or utility)
       }
@@ -697,21 +720,16 @@ void grabbuttons() {
 void setup() {
   // init atoms
   state_atom = XInternAtom(display, "_NET_WM_STATE", False);
+  name_atom = XInternAtom(display, "WM_NAME", False);
   fullscreen_atom = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
-  wmatom[WMProtocols] = XInternAtom(display, "WM_PROTOCOLS", False);
-  wmatom[WMDelete] = XInternAtom(display, "WM_DELETE_WINDOW", False);
-  netatom[NetWMFullscreen] =
-      XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
-  netatom[NetWMWindowType] = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
-  netatom[NetWMState] = XInternAtom(display, "_NET_WM_STATE", False);
-  netatom[NetWMWindowTypeDialog] =
-      XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-  netatom[NetClientList] = XInternAtom(display, "_NET_CLIENT_LIST", False);
-  netatom[NetClientInfo] = XInternAtom(display, "_NET_CLIENT_INFO", False);
-  netatom[NetWMWindowTypeToolbar] =
-      XInternAtom(display, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
-  netatom[NetWMWindowTypeDialog] =
-      XInternAtom(display, "_NET_WM_WINDOW_TYPE_UTILITY", False);
+  protocol_atom = XInternAtom(display, "WM_PROTOCOLS", False);
+  delete_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
+  type_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+  dialog_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+  client_list_atom = XInternAtom(display, "_NET_CLIENT_LIST", False);
+  client_info_atom = XInternAtom(display, "_NET_CLIENT_INFO", False);
+  toolbar_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
+  utility_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_UTILITY", False);
   // initing cursors
   cursors[CurNormal] = cur_create(XC_left_ptr);
   cursors[CurResize] = cur_create(XC_sizing);
@@ -731,6 +749,29 @@ void setup() {
   handler[MotionNotify] = handle_motion_notify;
   handler[PropertyNotify] = handle_property_notify;
   handler[UnmapNotify] = nothing; // Fixed spelling from "nothin" to "nothing"
+                                  //
+                                  //
+  // initing the font
+
+  screen = DefaultScreen(display);
+
+  xft_font = XftFontOpenName(display, screen, BAR_FONT.c_str());
+
+  Cursor cursor = cursors[CurNormal];
+  XDefineCursor(display, root, cursor);
+
+  for (int i = 0; i < NUM_WORKSPACES; i++) {
+    BUTTON_LABEL_UTF8[i] =
+        reinterpret_cast<XftChar8 *>(const_cast<char *>(workspaces_names[i]));
+    // determine button widths
+    BUTTONS_WIDTHS[i] = std::max(
+        BUTTON_WIDTH, get_utf8_string_width(display, BUTTON_LABEL_UTF8[i]));
+  }
+  for (int i = 1; i < NUM_WORKSPACES + 1; i++) {
+
+    BUTTONS_WIDTHS_PRESUM[i] =
+        BUTTONS_WIDTHS_PRESUM[i - 1] + BUTTONS_WIDTHS[i - 1];
+  }
 }
 int getrootptr(int *x, int *y) {
   int di;
@@ -772,14 +813,13 @@ void set_fullscreen(Client *client, bool full_screen) {
     return;
 
   if (!client->fullscreen && full_screen) {
-    XChangeProperty(display, client->window, netatom[NetWMState], XA_ATOM, 32,
-                    PropModeReplace, (unsigned char *)&netatom[NetWMFullscreen],
-                    1);
+    XChangeProperty(display, client->window, state_atom, XA_ATOM, 32,
+                    PropModeReplace, (unsigned char *)&fullscreen_atom, 1);
     client->fullscreen = true;
     make_fullscreen(client, current_monitor->width, current_monitor->height);
   } else if (client->fullscreen && !full_screen) {
     // Exit full-screen and restore the original size and position
-    XChangeProperty(display, client->window, netatom[NetWMState], XA_ATOM, 32,
+    XChangeProperty(display, client->window, state_atom, XA_ATOM, 32,
                     PropModeReplace, (unsigned char *)0, 0);
     XMoveResizeWindow(display, client->window, client->x, client->y,
                       client->width, client->height);
@@ -807,11 +847,11 @@ Atom getatomprop(Client *c, Atom prop) {
 }
 
 void updatewindowtype(Client *c) {
-  Atom state = getatomprop(c, netatom[NetWMState]);
-  Atom wtype = getatomprop(c, netatom[NetWMWindowType]);
+  Atom state = getatomprop(c, state_atom);
+  Atom wtype = getatomprop(c, type_atom);
 
-  if (state == netatom[NetWMFullscreen])
+  if (state == fullscreen_atom)
     set_fullscreen(c, 1);
-  if (wtype == netatom[NetWMWindowTypeDialog])
+  if (wtype == dialog_atom)
     c->floating = 1;
 }
