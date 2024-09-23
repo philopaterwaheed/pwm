@@ -10,20 +10,22 @@
 #define SHIFT ShiftMask // Usually the shift key
 #define NUM_LAYOUTS 4
 #define BORDER_WIDTH 1 // Width of the window border in pixels
+#define BAR_Y 15 //where the bar font should be placed
 
 static const unsigned int snap = 32; /* snap pixel */
-static float master_size = .6;
+static float master_size = .6; // the intial size of the master window
 // all about the bar
 static bool SHOW_BAR = true; // Whether to show the bar or not
 static std::string BAR_FONT =
-    "NotoMono Nerd Font:5";    // future fix the size doesn't work
-static int BAR_HEIGHT = 30;    // Height of the bar in pixels
-static int BUTTONS_WIDTH = 30; // Width of the buttons in pixels
+    "NotoMono Nerd Font:size=10";    
+static double SPACIL_CHAR_FONT_SIZE =10;     // font size for special characters and icons
+static int BAR_HEIGHT = 20;    // Height of the bar in pixels
+static int BUTTON_WIDTH = 30; //min  button width
 static Layout LAYOUTS[NUM_LAYOUTS] = {
-    {0, "tiled", tile_windows},
-    {1, "monocle", monocle_windows},
-    {2, "grid", grid_windows},
-    {3, "center", center_master_windows},
+    {0, "[]=", tile_windows},
+    {1, "M", monocle_windows},
+    {2, "HH", grid_windows},
+    {3, "|M|", center_master_windows},
 };
 struct Workspace {
   short index; // set to one for the first workspace
@@ -45,7 +47,7 @@ static int GAP_SIZE = 2; // Size of the gap around windows in pixels
 
 // all about workspaces
 #define NUM_WORKSPACES 5 // Number of workspaces
-static const std::string workspaces_names[NUM_WORKSPACES] = {
+static const char * workspaces_names[NUM_WORKSPACES] = {
     "_", "", "", "", ""};
 #define WORKSPACEKEYS(KEY, WORKSPACENUM)                                       \
   {MOD, KEY, switch_workspace, {.i = WORKSPACENUM}}, {                         \
@@ -59,6 +61,7 @@ struct Monitor {
   std::vector<Client> sticky;
   Workspace *current_workspace = NULL;
   Window bar;
+  XftDraw *xft_draw;
 };
 ///
 static const char dmenufont[] = "monospace:size=10";

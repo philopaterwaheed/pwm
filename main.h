@@ -65,7 +65,7 @@ struct shortcut {
 
 struct Layout {
   short index;
-  std ::string name;
+  std::string name;
   void (*arrange)(std::vector<Client *> *clients, int master_width,
                   int screen_height, int screen_width);
 };
@@ -77,31 +77,6 @@ struct Button {
 };
 
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor states*/
-enum {
-  WMProtocols,
-  WMDelete,
-  /* WMState, */
-  /* WMTakeFocus, */
-  WMLast
-}; /* default atoms */
-enum {
-  /* NetSupported, */
-  NetWMName,
-  NetWMState,
-  /* NetWMCheck, */
-  NetWMFullscreen,
-  /* NetWMSticky, */
-  /* NetActiveWindow, */
-  NetWMWindowType,
-  NetWMWindowTypeDialog,
-  NetWMWindowTypeToolbar,
-  NetWMWindowTypeUtility,
-  NetClientList,
-  NetClientInfo,
-  NetLast
-}; /* EWMH atoms */
-
-static Atom wmatom[WMLast], netatom[NetLast];
 
 
 
@@ -116,7 +91,7 @@ void movement_warp(Window *win) ;
 void update_bar();
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
                                  XftColor *color, const std::string &text,
-                                 int x, int y, int screen);
+                                 int x, int y, int screen) ;
 void cleanup();
 // arg functions to invoke with shortcut
 void resize_focused_window_x(const Arg *arg);
@@ -158,11 +133,10 @@ void handle_client_message(XEvent *e) ;
 void nothing(XEvent *e) ;
 // font functions
 void draw_text_with_dynamic_font(Display *display, Window window, XftDraw *draw,
-                                 XftColor *color, const std::string &text,
+                                 XftColor *color,XftChar8 *utf8_string,
                                  int x, int y, int screen, int monitor_width);
-int get_utf8_string_width(Display *display, XftFont *font,
-                          const std::string &text);
-XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen);
+int get_utf8_string_width(Display *display, XftChar8 *utf8_string) ;
+XftFont *select_font_for_char(Display *display, FcChar32 ucs4, int screen) ;
 int sendevent(Window window, Atom proto);
 static void clientmsg(Window win, Atom atom, unsigned long d0, unsigned long d1,
                       unsigned long d2, unsigned long d3, unsigned long d4);
