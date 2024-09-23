@@ -15,12 +15,13 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Client> *sticky;
 extern std::string status;
-extern Atom state_atom, fullscreen_atom, delete_atom, protocol_atom, type_atom,utility_atom,name_atom,
-    toolbar_atom, client_list_atom, client_info_atom, dialog_atom;
+extern Atom state_atom, fullscreen_atom, delete_atom, protocol_atom, type_atom,
+    utility_atom, name_atom, toolbar_atom, client_list_atom, client_info_atom,
+    dialog_atom;
 extern Atom fullscreen_atom;
 extern int BUTTONS_WIDTHS[NUM_WORKSPACES + 1];
 extern int BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES +
-                          1]; // a presum array for button widths
+                                 1]; // a presum array for button widths
 
 void handle_button_press_event(XEvent *e) {
   XButtonPressedEvent *ev = &e->xbutton;
@@ -34,19 +35,21 @@ void handle_button_press_event(XEvent *e) {
   int x = e->xbutton.x;
   int y = e->xbutton.y;
 
-  int button_index = -1 ;
+  int button_index = -1;
   // Determine which button was clicked
-  for (int i = 1; i < NUM_WORKSPACES+1 ; i++){
-    if (x>=BUTTONS_WIDTHS_PRESUM[i-1] && x<=BUTTONS_WIDTHS_PRESUM[i]){
-    		  button_index = i-1;
-    		  break;
-    	  }
+  for (int i = 1; i < NUM_WORKSPACES + 1; i++) {
+    if (x >= BUTTONS_WIDTHS_PRESUM[i - 1] && x <= BUTTONS_WIDTHS_PRESUM[i]) {
+      button_index = i - 1;
+      break;
+    }
   }
-  if ( button_index>= 0 && y <= BAR_HEIGHT * (current_workspace->show_bar) &&
+  if (button_index >= 0 && y <= BAR_HEIGHT * (current_workspace->show_bar) &&
       button_index < NUM_WORKSPACES) {
     switch_workspace(new (Arg){.i = button_index + 1});
     update_bar();
-  } else if (x >= BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES] && x<= BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES]+BUTTONS_WIDTHS[NUM_WORKSPACES]&&
+  } else if (x >= BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES] &&
+             x <= BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES] +
+                      BUTTONS_WIDTHS[NUM_WORKSPACES] &&
              y <= BAR_HEIGHT * (current_workspace->show_bar)) {
     toggle_layout();
   }
@@ -92,9 +95,11 @@ void handle_map_request(XEvent *e) {
                    static_cast<unsigned int>(wa.height),
                    .floating = wants_floating(ev->window)};
   clients->push_back(client);
-  if (!client.floating)
+  if (!client.floating) {
     current_workspace->master = clients->back().window;
-  focused_window = clients->back().window;
+    focused_window = ev->window;
+  }
+
   arrange_windows();
   XSelectInput(display, ev->window,
                EnterWindowMask | FocusChangeMask | PropertyChangeMask);

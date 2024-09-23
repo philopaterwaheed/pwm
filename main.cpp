@@ -647,14 +647,7 @@ void arrange_windows() {
                                // window in the any arranged mood anyways
       make_fullscreen(client, screen_width, screen_height);
     }
-  if (focused_window == None) {
-    focused_window = current_workspace->master;
-  }
-  if (focused_window)
-    movement_warp(&focused_window);
-  else
-    movement_warp(&current_workspace->master);
-}
+ }
 void toggle_layout() {
   if (!(current_workspace->layout == 1 &&
         current_workspace->layout_index_place_holder == 1)) {
@@ -684,7 +677,7 @@ bool wants_floating(Window win) {
                          &data) == Success) {
     Atom *atoms = (Atom *)data;
     for (unsigned long i = 0; i < nitems; i++) {
-      if (atoms[i] == dialog_atom || atoms[i] == toolbar_atom ||
+      if (atoms[i] == dialog_atom || atoms[i] == toolbar_atom || atoms[i] == client_info_atom||
           atoms[i] == utility_atom) {
         XFree(data);
         return true; // Floating window (e.g., dialog, toolbar, or utility)
