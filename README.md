@@ -46,7 +46,7 @@ This window manager is built using the X11 library. Ensure that you have the fol
 
 2. **Compile the window manager**:
    ```bash
-   sudo make
+   sudo make clean install
    ```
 
 3. **Run the window manager**:
@@ -161,7 +161,6 @@ This window manager is released under the MIT License.
 
 # screen shots
 ![2024-09-23_06-13](https://github.com/user-attachments/assets/0010defd-ab08-4cd8-a8f7-86ba099cab38)
-
 ![2024-09-23_06-27](https://github.com/user-attachments/assets/8c93975a-fc55-480f-9dca-c623a04b3d54)
 ![2024-09-23_06-29](https://github.com/user-attachments/assets/a0be1844-4d0f-4902-823d-aea5e781af53)
 ![2024-09-23_06-31](https://github.com/user-attachments/assets/9a10e87a-3362-4b32-908a-c93297595b50)
