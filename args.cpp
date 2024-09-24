@@ -99,7 +99,7 @@ void move_focused_window_y(const Arg *arg) {
   }
 }
 void swap_window(const Arg *arg) {
- int index1 = get_focused_window_index();
+  int index1 = get_focused_window_index();
   int index2 = index1 + arg->i;
   // Wrap index2 within the valid range
   index2 = (index2 < 0) ? clients->size() - 1 : index2 % clients->size();
@@ -305,7 +305,7 @@ void toggle_bar(const Arg *arg) {
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |
                      KeyPressMask | ExposureMask | PropertyChangeMask |
-                     /* MotionNotify | */ SubstructureRedirectMask |
+                     MotionNotify | SubstructureRedirectMask |
                      SubstructureNotifyMask | ButtonPressMask |
                      PointerMotionMask | EnterWindowMask | LeaveWindowMask |
                      StructureNotifyMask | PropertyChangeMask);
@@ -317,7 +317,7 @@ void toggle_bar(const Arg *arg) {
     XSelectInput(display, root,
                  SubstructureRedirectMask | SubstructureNotifyMask |
                      KeyPressMask | ExposureMask | PropertyChangeMask |
-                     /* MotionNotify | */ SubstructureRedirectMask |
+                     MotionNotify | SubstructureRedirectMask |
                      SubstructureNotifyMask | ButtonPressMask |
                      PointerMotionMask | EnterWindowMask | LeaveWindowMask |
                      StructureNotifyMask);
@@ -508,6 +508,8 @@ void movemouse(const Arg *arg) {
   if (!client->floating)
     toggle_floating(arg);
 
+  else
+    XRaiseWindow(display, client->window);
   ocx = client->x, ocy = client->y;
   if (XGrabPointer(display, root, False, MOUSEMASK, GrabModeAsync,
                    GrabModeAsync, None, cursors[CurMove],
