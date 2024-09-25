@@ -139,6 +139,7 @@ void update_bar() {
 
     status += std::to_string(c->monitor);
   }
+  status += std::to_string(clients->size());
 
   XftChar8 *status_utf8 =
       reinterpret_cast<XftChar8 *>(const_cast<char *>(status.c_str()));
@@ -489,6 +490,7 @@ void setup() {
                   StructureNotifyMask | PropertyChangeMask | PointerMotionMask;
   XChangeWindowAttributes(display, root, CWEventMask | CWCursor, &wa);
   XSelectInput(display, root, wa.event_mask);
+  add_existing_windows();
 }
 int getrootptr(int *x, int *y) {
   int di;
@@ -581,13 +583,14 @@ Monitor *rect_to_mon(int x, int y, int w, int h) {
   Monitor *monitor;
   int a, area = 0;
 
-  for (auto m : monitors) {
+  for (auto &m : monitors) {
     a = INTERSECT(x, y, w, h, m);
     if (a > area) {
       area = a;
       monitor = &m;
     }
   }
+
   return monitor;
 }
 
@@ -621,5 +624,30 @@ void send_to_monitor(Client *client, Monitor *prev_monitor,
                 : void(); // arrange windows for next monitor
     // the bool for if we sending a float client we don't need the overhead of
     // rearrange
+  }
+}
+void add_existing_windows() {
+  Window root_return, parent_return;
+  Window *children;
+  unsigned int nchildren;
+
+  // Get the list of child windows under the root window
+  if (XQueryTree(display, root, &root_return, &parent_return, &children,
+                 &nchildren)) {
+    for (unsigned int i = 0; i < nchildren; i++) {
+      XWindowAttributes attr;
+      XGetWindowAttributes(display, children[i], &attr);
+
+      if (attr.map_state == IsViewable && !attr.override_redirect) {
+        clients->push_back({children[i]});
+
+        XSelectInput(display, children[i],
+                     EnterWindowMask | FocusChangeMask | PropertyChangeMask |
+                         StructureNotifyMask);
+      }
+    }
+
+    if (children)
+      XFree(children);
   }
 }

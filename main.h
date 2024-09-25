@@ -194,3 +194,4 @@ void send_to_monitor(Client *client , Monitor * prev_monitor,Monitor *next_monit
 void sendto_next_monitor(const Arg *arg) ;
 void sendto_previous_monitor(const Arg *arg) ;
 void assign_client_to_monitor(Client *client) ;
+void add_existing_windows() ;

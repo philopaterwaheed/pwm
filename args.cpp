@@ -575,7 +575,19 @@ void movemouse(const Arg *arg) {
   client->y = new_y;
   XUngrabPointer(display, CurrentTime);
   Monitor *m = rect_to_mon(client->x, client->y, client->width, client->height);
-  if (m && client && m->index != client->monitor) {
+  if (m && client && m->index == client->monitor) {
+      std::string log = "echo 'got monitor";
+    log += std::to_string(m->index);
+    log += " "; 
+    log += std::to_string(monitors[client->monitor].index);
+    log += " "; 
+    log += std::to_string(m->width);
+    log += " ";
+    log += std::to_string(client->monitor);
+    log += " ";
+    log += " ";
+    log += "' >> /tmp/log.txt";
+    system(log.c_str());
       send_to_monitor(client, &monitors[client->monitor],m);
   }
   // code for monitors check it
