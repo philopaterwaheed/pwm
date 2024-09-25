@@ -133,7 +133,6 @@ void update_bar() {
                                 BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] / 3,
                                 BAR_Y, screen, current_monitor->width);
   }
-  status = std::to_string(clients->size());
   XftChar8 *status_utf8 =
       reinterpret_cast<XftChar8 *>(const_cast<char *>(status.c_str()));
 

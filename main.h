@@ -24,6 +24,7 @@
 #include <cmath>
 #include <csignal>
 #include <wait.h>
+#include <unordered_set>
 
 #define HEIGHT(X) ((X)->height + 2 * BORDER_WIDTH)
 #define WIDTH(X) ((X)->width + 2  * BORDER_WIDTH)
@@ -186,3 +187,4 @@ static void (*handler[LASTEvent])(XEvent *);
 void updatewindowtype(Client *c) ;
 Atom getatomprop(Client *c, Atom prop) ;
 void change_focused_window(const Arg *arg) ;
+void clean_clients(std::unordered_set<Window> &windows) ;

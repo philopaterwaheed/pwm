@@ -24,6 +24,7 @@ extern Window
 void arrange_windows() {
   std::vector<Client *> fullscreen_clients;
   std::vector<Client *> arranged_clients;
+  std::unordered_set<Window> clients_to_remove;
   XWindowAttributes att;
   // First, count the number of non-floating (arranged) clients and store the
   // them
@@ -33,6 +34,7 @@ void arrange_windows() {
     if (XGetWindowAttributes(display, client.window, &att) == 0) {
       if (client.window == current_workspace->master)
         current_workspace->master = None;
+      clients_to_remove.insert(client.window);
       continue;
     }
     if (!client.floating && !client.fullscreen) {
@@ -75,6 +77,9 @@ void arrange_windows() {
     }
   if (focused_window == None) {
     focused_window = current_workspace->master;
+  }
+  if (clients_to_remove.size() != 0){
+      clean_clients(clients_to_remove);
   }
 }
 
@@ -295,4 +300,11 @@ void make_fullscreen(Client *client, int screen_width, int screen_height,
   // Go full-screen (resize to cover the entire screen)
   (raise) ? XRaiseWindow(display, client->window)
           : XLowerWindow(display, client->window);
+}
+void clean_clients(std::unordered_set<Window> &windows) {
+  clients->erase(std::remove_if(clients->begin(), clients->end(),
+                                [&windows](const Client &c) {
+                                  return windows.count(c.window);
+                                }),
+                 clients->end());
 }
