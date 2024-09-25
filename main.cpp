@@ -7,10 +7,9 @@
 #include <cstdlib>
 #include <string>
 
-Atom state_atom, fullscreen_atom, delete_atom, protocol_atom, type_atom,
-    name_atom, utility_atom, toolbar_atom, client_list_atom, client_info_atom,
-    dialog_atom;
+Atom delete_atom, protocol_atom, name_atom;
 
+Atom netatom[NetLast];
 Display *display; // the connection to the X server
 int screen;
 Window root; // the root window top level window all other windows are children
@@ -22,7 +21,7 @@ extern Cursor cursors[3];
 Monitor *current_monitor = nullptr; // The monitor in focus
 Workspace *current_workspace;
 //
-std::vector<Monitor> monitors;      // List of monitors
+std::vector<Monitor> monitors; // List of monitors
 std::vector<Workspace> *workspaces;
 std::vector<Client> *clients;
 std::vector<Client> *sticky;
@@ -31,6 +30,9 @@ std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
 
 extern XftFont *xft_font;
+
+bool multi_monitor = false; // to detect if there are multiple monitors to
+                            // cancle montion notify if there is not
 
 // to store button widths and utf8 strings
 int BUTTONS_WIDTHS[NUM_WORKSPACES + 1];
@@ -131,6 +133,7 @@ void update_bar() {
                                 BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] / 3,
                                 BAR_Y, screen, current_monitor->width);
   }
+  status = std::to_string(clients->size());
   XftChar8 *status_utf8 =
       reinterpret_cast<XftChar8 *>(const_cast<char *>(status.c_str()));
 
@@ -214,7 +217,7 @@ void update_status(XEvent *ev) {
         XFreeStringList(list);
       } else {
         // If conversion failed or there was no text, return empty string
-        status = "pwm";
+        status = "pwm by philo";
       }
     }
   }
@@ -265,26 +268,10 @@ int main() {
   root = DefaultRootWindow(display);
   XSetErrorHandler(errorHandler);
 
-  // Subscribe to events on the root window
-  XSelectInput(display, root,
-               SubstructureRedirectMask | SubstructureNotifyMask |
-                   KeyPressMask | ExposureMask | PropertyChangeMask |
-                    MotionNotify |  SubstructureRedirectMask |
-                   SubstructureNotifyMask | ButtonPressMask |
-                   PointerMotionMask | EnterWindowMask | LeaveWindowMask |
-                   StructureNotifyMask | PropertyChangeMask);
-
   setup();
-  detect_monitors();
   grab_keys();
   grabbuttons();
 
-  for (auto &monitor : monitors) {
-    for (int i = 0; i < NUM_WORKSPACES; ++i) { // setting the workspace index
-      monitor.workspaces[i].index = i;
-    }
-    monitor.current_workspace = &monitor.workspaces[0];
-  }
   create_bars();
   update_bar();
   run();
@@ -302,6 +289,10 @@ void detect_monitors() {
   int num_monitors;
   XineramaScreenInfo *screens = XineramaQueryScreens(display, &num_monitors);
 
+  if (num_monitors > 1) {
+
+    multi_monitor = true;
+  }
   for (int i = 0; i < num_monitors; i++) {
     Monitor monitor;
     monitor.screen = screens[i].screen_number;
@@ -402,13 +393,14 @@ bool wants_floating(Window win) {
   unsigned char *data = NULL;
 
   // Get the _NET_WM_WINDOW_TYPE property from the window
-  if (XGetWindowProperty(display, win, type_atom, 0, (~0L), False, XA_ATOM,
-                         &type, &format, &nitems, &bytes_after,
+  if (XGetWindowProperty(display, win, netatom[NetWMWindowType], 0, (~0L),
+                         False, XA_ATOM, &type, &format, &nitems, &bytes_after,
                          &data) == Success) {
     Atom *atoms = (Atom *)data;
     for (unsigned long i = 0; i < nitems; i++) {
-      if (atoms[i] == dialog_atom || atoms[i] == toolbar_atom ||
-          atoms[i] == client_info_atom || atoms[i] == utility_atom) {
+      if (atoms[i] == netatom[NetWMWindowTypeDialog] ||
+          atoms[i] == netatom[NetToolBar] ||
+          atoms[i] == netatom[NetClientInfo] || atoms[i] == NetWMFullscreen) {
         XFree(data);
         return true; // Floating window (e.g., dialog, toolbar, or utility)
       }
@@ -441,18 +433,25 @@ void grabbuttons() {
                 BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
 }
 void setup() {
+  XSetWindowAttributes wa;
   // init atoms
-  state_atom = XInternAtom(display, "_NET_WM_STATE", False);
   name_atom = XInternAtom(display, "WM_NAME", False);
-  fullscreen_atom = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
   protocol_atom = XInternAtom(display, "WM_PROTOCOLS", False);
   delete_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
-  type_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
-  dialog_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-  client_list_atom = XInternAtom(display, "_NET_CLIENT_LIST", False);
-  client_info_atom = XInternAtom(display, "_NET_CLIENT_INFO", False);
-  toolbar_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
-  utility_atom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_UTILITY", False);
+  netatom[NetSupported] = XInternAtom(display, "_NET_SUPPORTED", False);
+  netatom[NetWMName] = XInternAtom(display, "_NET_WM_NAME", False);
+  netatom[NetWMState] = XInternAtom(display, "_NET_WM_STATE", False);
+  netatom[NetWMCheck] = XInternAtom(display, "_NET_SUPPORTING_WM_CHECK", False);
+  netatom[NetWMFullscreen] =
+      XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
+  netatom[NetWMWindowType] = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+  netatom[NetWMWindowTypeDialog] =
+      XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+  netatom[NetClientList] = XInternAtom(display, "_NET_CLIENT_LIST", False);
+  netatom[NetClientInfo] = XInternAtom(display, "_NET_CLIENT_INFO", False);
+  netatom[NetToolBar] = XInternAtom(display, "_NET_TOOLBAR", False);
+  netatom[NetUtility] = XInternAtom(display, "_NET_UTILITY", False);
+
   // initing cursors
   cursors[CurNormal] = cur_create(XC_left_ptr);
   cursors[CurResize] = cur_create(XC_sizing);
@@ -481,9 +480,6 @@ void setup() {
 
   xft_font = XftFontOpenName(display, screen, BAR_FONT.c_str());
 
-  Cursor cursor = cursors[CurNormal];
-  XDefineCursor(display, root, cursor);
-
   for (int i = 0; i < NUM_WORKSPACES; i++) {
     BUTTON_LABEL_UTF8[i] =
         reinterpret_cast<XftChar8 *>(const_cast<char *>(workspaces_names[i]));
@@ -496,6 +492,29 @@ void setup() {
     BUTTONS_WIDTHS_PRESUM[i] =
         BUTTONS_WIDTHS_PRESUM[i - 1] + BUTTONS_WIDTHS[i - 1];
   }
+  detect_monitors();
+  for (auto &monitor : monitors) {
+    for (int i = 0; i < NUM_WORKSPACES; ++i) { // setting the workspace index
+      monitor.workspaces[i].index = i;
+    }
+    monitor.current_workspace = &monitor.workspaces[0];
+  }
+  Atom utf8string = utf8string = XInternAtom(display, "UTF8_STRING", False);
+  Window wmcheckwin = XCreateSimpleWindow(display, root, 0, 0, 1, 1, 0, 0, 0);
+  XChangeProperty(display, wmcheckwin, netatom[NetWMCheck], XA_WINDOW, 32,
+                  PropModeReplace, (unsigned char *)&wmcheckwin, 1);
+  XChangeProperty(display, wmcheckwin, netatom[NetWMName], utf8string, 8,
+                  PropModeReplace, (unsigned char *)"pwm", 3);
+  XChangeProperty(display, root, netatom[NetWMCheck], XA_WINDOW, 32,
+                  PropModeReplace, (unsigned char *)&wmcheckwin, 1);
+  XChangeProperty(display, root, netatom[NetSupported], XA_ATOM, 32,
+                  PropModeReplace, (unsigned char *)netatom, NetLast);
+  wa.cursor = cursors[CurNormal];
+  wa.event_mask = SubstructureRedirectMask | SubstructureNotifyMask |
+                  ButtonPressMask | (multi_monitor & MotionNotify) | EnterWindowMask |
+                  LeaveWindowMask | StructureNotifyMask | PropertyChangeMask;
+  XChangeWindowAttributes(display, root, CWEventMask | CWCursor, &wa);
+  XSelectInput(display, root, wa.event_mask);
 }
 int getrootptr(int *x, int *y) {
   int di;
@@ -504,19 +523,20 @@ int getrootptr(int *x, int *y) {
 
   return XQueryPointer(display, root, &dummy, &dummy, x, y, &di, &di, &dui);
 }
-void resizeclient(Client *c, int x, int y, int w, int h) {
+void resizeclient(Client *c, int x, int y, int w, int h, int border_width) {
   XWindowChanges wc;
 
   c->x = wc.x = x;
   c->y = wc.y = y;
   c->width = wc.width = w;
   c->height = wc.height = h;
+  wc.border_width = border_width;
   XConfigureWindow(display, c->window,
                    CWX | CWY | CWWidth | CWHeight | CWBorderWidth, &wc);
-  configure(c);
+  configure(c, border_width);
   XSync(display, False);
 }
-void configure(Client *c) {
+void configure(Client *c, int border_width) {
   XConfigureEvent ce;
 
   ce.type = ConfigureNotify;
@@ -527,7 +547,7 @@ void configure(Client *c) {
   ce.y = c->y;
   ce.width = c->width;
   ce.height = c->height;
-  ce.border_width = BORDER_WIDTH;
+  ce.border_width = border_width;
   ce.above = None;
   ce.override_redirect = False;
   XSendEvent(display, c->window, False, StructureNotifyMask, (XEvent *)&ce);
@@ -537,23 +557,27 @@ void set_fullscreen(Client *client, bool full_screen) {
     return;
 
   if (!client->fullscreen && full_screen) {
-    XChangeProperty(display, client->window, state_atom, XA_ATOM, 32,
-                    PropModeReplace, (unsigned char *)&fullscreen_atom, 1);
+    auto f = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", true);
+    auto a = XInternAtom(display, "_NET_WM_STATE", true);
+
     client->fullscreen = true;
-    make_fullscreen(client, current_monitor->width, current_monitor->height);
+    XChangeProperty(display, client->window, a, XA_ATOM, 32, PropModeReplace,
+                    (unsigned char *)&f, 1);
+    if (client->window == current_workspace->master) {
+      current_workspace->master = None;
+    }
   } else if (client->fullscreen && !full_screen) {
     // Exit full-screen and restore the original size and position
-    XChangeProperty(display, client->window, state_atom, XA_ATOM, 32,
+    XChangeProperty(display, client->window, netatom[NetWMState], XA_ATOM, 32,
                     PropModeReplace, (unsigned char *)0, 0);
-    XMoveResizeWindow(display, client->window, client->x, client->y,
-                      client->width, client->height);
-
-    // Restore the window border
-    XSetWindowBorderWidth(display, client->window, BORDER_WIDTH);
-
     client->fullscreen = false;
+    client->floating = false;
   }
   focused_window = client->window;
+  movement_warp(&client->window);
+  arrange_windows();
+  // idon't know why i need this here if I but if at the toggle fullscreen it
+  // makes the browser video player fullscreen sheft down by the bar height
 }
 Atom getatomprop(Client *c, Atom prop) {
   int di;
@@ -571,11 +595,11 @@ Atom getatomprop(Client *c, Atom prop) {
 }
 
 void updatewindowtype(Client *c) {
-  Atom state = getatomprop(c, state_atom);
-  Atom wtype = getatomprop(c, type_atom);
+  Atom state = getatomprop(c, netatom[NetWMState]);
+  Atom wtype = getatomprop(c, netatom[NetWMWindowType]);
 
-  if (state == fullscreen_atom)
+  if (state == netatom[NetWMFullscreen])
     set_fullscreen(c, 1);
-  if (wtype == dialog_atom)
+  if (wtype == netatom[NetWMWindowTypeDialog])
     c->floating = 1;
 }

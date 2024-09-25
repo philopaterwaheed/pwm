@@ -77,6 +77,22 @@ struct Button {
 };
 
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor states*/
+enum {
+  NetSupported,
+  NetWMName,
+  NetWMState,
+  NetWMCheck,
+  NetWMFullscreen,
+  /* NetWMSticky, */
+  /* NetActiveWindow, */
+  NetWMWindowType,
+  NetWMWindowTypeDialog,
+  NetClientList,
+  NetClientInfo,
+  NetToolBar,
+  NetUtility,
+  NetLast
+}; /* EWMH atoms */
 
 
 
@@ -162,8 +178,8 @@ bool wants_floating(Window win) ;
 Cursor cur_create(int shape) ;
 void setup();
 int getrootptr(int *x, int *y) ;
-void configure(Client *c) ;
-void resizeclient(Client *c, int x, int y, int w, int h) ;
+void configure(Client *c , int border_width ) ;
+void resizeclient(Client *c, int x, int y, int w, int h , int border_width) ;
 void set_fullscreen(Client *client, bool full_screen) ;
 static void (*handler[LASTEvent])(XEvent *);
 

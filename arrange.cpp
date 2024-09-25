@@ -2,6 +2,7 @@
 //
 #include "config.h"
 #include "main.h"
+#include <X11/Xlib.h>
 
 // vectors to control and collect the windows
 extern std::vector<Workspace> *workspaces;
@@ -18,7 +19,8 @@ extern Display *display; // the connection to the X server
 extern int screen;
 extern Window
     root; // the root window top level window all other windows are children
-
+extern Window
+    focused_window; // the window that has the focus of the mouse pointer
 void arrange_windows() {
   std::vector<Client *> fullscreen_clients;
   std::vector<Client *> arranged_clients;
@@ -33,12 +35,13 @@ void arrange_windows() {
         current_workspace->master = None;
       continue;
     }
-    if (!client.floating) {
-      if (client.window != current_workspace->master)
+    if (!client.floating && !client.fullscreen) {
+      if (current_workspace->master == None) {
+        current_workspace->master = client.window;
+      } else if (client.window != current_workspace->master)
         current_workspace->cfacts += client.cfact;
       arranged_clients.push_back(&client);
-    }
-    if (client.fullscreen) {
+    } else if (client.fullscreen) {
       fullscreen_clients.push_back(&client);
     }
   }
@@ -70,6 +73,9 @@ void arrange_windows() {
                                // window in the any arranged mood anyways
       make_fullscreen(client, screen_width, screen_height);
     }
+  if (focused_window == None) {
+    focused_window = current_workspace->master;
+  }
 }
 
 // the tile windows function for the tile layout
@@ -95,7 +101,7 @@ void tile_windows(std::vector<Client *> *clients, int master_width,
       int w = master_width - 2 * (GAP_SIZE + BORDER_WIDTH);
       int h = screen_height - current_workspace->bar_height -
               2 * (GAP_SIZE + BORDER_WIDTH);
-      XMoveResizeWindow(display, c->window, x, y, w, h);
+      resizeclient(c, x, y, w, h, BORDER_WIDTH);
       c->x = x;
       c->y = y;
       c->width = w;
@@ -112,9 +118,9 @@ void tile_windows(std::vector<Client *> *clients, int master_width,
       last_y = y + last_height; // the y of the client
       int x = current_monitor->x + master_width + GAP_SIZE;
       // Move and resize the window with calculated position and size
-      XMoveResizeWindow(display, c->window, x, y, // Position with gaps
-                        stack_width,              // Width adjusted for border
-                        stack_height              // Height adjusted for border
+      resizeclient(c, x, y,                   // Position with gaps
+                   stack_width,               // Width adjusted for border
+                   stack_height, BORDER_WIDTH // Height adjusted for border
       );
 
       c->x = x;
@@ -278,26 +284,14 @@ void center_master_windows(std::vector<Client *> *clients, int master_width,
   }
 }
 
-
-// make a window full screen 
+// make a window full screen
 void make_fullscreen(Client *client, int screen_width, int screen_height,
                      bool raise) {
   // Save the original position and size
-  XWindowAttributes wa;
-  XGetWindowAttributes(display, client->window, &wa);
-  client->x = wa.x;
-  client->y = wa.y;
-  client->width = wa.width;
-  client->height = wa.height;
-  ////saving for future unmake fullscreen
-
-  XMoveResizeWindow(display, client->window, current_monitor->x + GAP_SIZE,
-                    current_monitor->y + current_workspace->bar_height +
-                        GAP_SIZE,
-                    screen_width - 2 * (GAP_SIZE + BORDER_WIDTH),
-                    screen_height - current_workspace->bar_height -
-                        2 * (GAP_SIZE + BORDER_WIDTH));
-  XSetWindowBorderWidth(display, client->window, BORDER_WIDTH);
+  focused_window = None;
+  resizeclient(client, current_monitor->x,
+               current_monitor->y + current_workspace->bar_height, screen_width,
+               screen_height - current_workspace->bar_height, 0);
   // Go full-screen (resize to cover the entire screen)
   (raise) ? XRaiseWindow(display, client->window)
           : XLowerWindow(display, client->window);

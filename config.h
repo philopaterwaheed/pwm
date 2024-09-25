@@ -9,7 +9,7 @@
 #define ALT Mod1Mask    // Usually the Alt key
 #define SHIFT ShiftMask // Usually the shift key
 #define NUM_LAYOUTS 4
-#define BORDER_WIDTH 1 // Width of the window border in pixels
+#define BORDER_WIDTH 2 // Width of the window border in pixels
 #define BAR_Y 15 //where the bar font should be placed
 
 static const unsigned int snap = 32; /* snap pixel */
