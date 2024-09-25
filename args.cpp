@@ -2,7 +2,6 @@
 // args.cpp functions used in shortcuts
 #include "config.h"
 #include "main.h"
-#include <X11/Xlib.h>
 
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
@@ -302,25 +301,11 @@ void toggle_bar(const Arg *arg) {
     std::swap(current_workspace->bar_height,
               current_workspace->bar_height_place_holder);
     XMapWindow(display, current_monitor->bar);
-    XSelectInput(display, root,
-                 SubstructureRedirectMask | SubstructureNotifyMask |
-                     KeyPressMask | ExposureMask | PropertyChangeMask |
-                     MotionNotify | SubstructureRedirectMask |
-                     SubstructureNotifyMask | ButtonPressMask |
-                     PointerMotionMask | EnterWindowMask | LeaveWindowMask |
-                     StructureNotifyMask | PropertyChangeMask);
     update_bar();
   } else {
     std::swap(current_workspace->bar_height,
               current_workspace->bar_height_place_holder);
     XUnmapWindow(display, current_monitor->bar);
-    XSelectInput(display, root,
-                 SubstructureRedirectMask | SubstructureNotifyMask |
-                     KeyPressMask | ExposureMask | PropertyChangeMask |
-                     MotionNotify | SubstructureRedirectMask |
-                     SubstructureNotifyMask | ButtonPressMask |
-                     PointerMotionMask | EnterWindowMask | LeaveWindowMask |
-                     StructureNotifyMask);
   }
   arrange_windows();
 }
@@ -328,8 +313,11 @@ void toggle_fullscreen(const Arg *arg) {
   Client *client = find_client(focused_window);
   if (!client)
     return;
-  if (!client->sticky)
+  if (!client->sticky) {
+    if (client->window == current_workspace->master)
+      current_workspace->master = None;
     set_fullscreen(client, !client->fullscreen);
+  }
 }
 /* void lunch(const Arg *arg) { */
 /*   char **args = (char **)arg->v; */
@@ -570,10 +558,6 @@ void resizemouse(const Arg *arg) {
   XEvent ev;
   Time lastMotionTime = 0;
 
-  if (!client || client->fullscreen ||
-      current_workspace->layout ==
-          1) // no support for resizing fullscreen windows by mouse or moncole
-    return;
   if (client->fullscreen ||
       current_workspace->layout ==
           1) // no support for resizing fullscreen windows by mouse or moncole
@@ -656,7 +640,7 @@ void toggle_sticky(const Arg *arg) {
   if (focused_window == None)
     return;
   Client *c = find_client(focused_window);
-  if (c) {
+  if (c && !c->fullscreen && !c->sticky) {
     Client client = *c;
     if (client.sticky) {
       auto it = std::remove_if(sticky->begin(), sticky->end(), [&](Client &c) {

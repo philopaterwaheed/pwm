@@ -15,10 +15,8 @@ extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Client> *sticky;
 extern std::string status;
-extern Atom state_atom, fullscreen_atom, delete_atom, protocol_atom, type_atom,
-    utility_atom, name_atom, toolbar_atom, client_list_atom, client_info_atom,
-    dialog_atom;
-extern Atom fullscreen_atom;
+extern Atom delete_atom, protocol_atom, name_atom;
+extern Atom netatom[NetLast];
 extern int BUTTONS_WIDTHS[NUM_WORKSPACES + 1];
 extern int BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES +
                                  1]; // a presum array for button widths
@@ -57,8 +55,8 @@ void handle_button_press_event(XEvent *e) {
 void handle_focus_in(XEvent *e) {
   XFocusChangeEvent *ev = &e->xfocus;
   focused_window = ev->window;
-  /* if (focused_window != None) */
-  XSetWindowBorder(display, focused_window, FOCUSED_BORDER_COLOR);
+  if (focused_window != None)
+    XSetWindowBorder(display, focused_window, FOCUSED_BORDER_COLOR);
 }
 
 void handle_focus_out(XEvent *e) {
@@ -97,34 +95,39 @@ void handle_map_request(XEvent *e) {
   clients->push_back(client);
   if (!client.floating) {
     current_workspace->master = clients->back().window;
-    focused_window = ev->window;
   }
 
-  arrange_windows();
   XSelectInput(display, ev->window,
-               EnterWindowMask | FocusChangeMask | PropertyChangeMask);
-  XMapWindow(display, ev->window);
+               EnterWindowMask | FocusChangeMask | PropertyChangeMask |
+                   StructureNotifyMask);
+
   // Set border width
   XSetWindowBorderWidth(display, ev->window, BORDER_WIDTH);
   // Set initial border color (unfocused)
-  // we map afterarrange for  redusing visual glitchs
+  focused_window = ev->window;
+  arrange_windows();
+  XMapWindow(display,
+             ev->window); // we map afterarrange for  redusing visual glitchs
 }
 
 void handle_configure_request(XEvent *e) {
   // this event is sent when a window wants to change its size/position
-  XConfigureRequestEvent *ev = &e->xconfigurerequest;
+  Client *c = find_client(e->xconfigurerequest.window);
+  if (c && c->floating) {
+    XConfigureRequestEvent *ev = &e->xconfigurerequest;
 
-  XWindowChanges changes;
-  changes.x = ev->x;
-  changes.y = ev->y;
-  changes.width = ev->width;
-  changes.height = ev->height;
-  changes.border_width = ev->border_width;
-  changes.sibling = ev->above;
-  changes.stack_mode = ev->detail;
+    XWindowChanges changes;
+    changes.x = ev->x;
+    changes.y = ev->y;
+    changes.width = ev->width;
+    changes.height = ev->height;
+    changes.border_width = ev->border_width;
+    changes.sibling = ev->above;
+    changes.stack_mode = ev->detail;
 
-  XConfigureWindow(display, ev->window, ev->value_mask, &changes);
-  set_size_hints(ev->window);
+    set_size_hints(ev->window);
+    XConfigureWindow(display, ev->window, ev->value_mask, &changes);
+  }
 }
 void handle_key_press(XEvent *e) {
   XKeyEvent *ev = &e->xkey;
@@ -183,25 +186,42 @@ void handle_property_notify(XEvent *e) {
     update_status(e);
     update_bar();
   }
-  if (ev->atom == type_atom) {
+  if (ev->atom == netatom[NetWMWindowType]) {
     Client *c = find_client(ev->window);
     updatewindowtype(c);
   }
 }
 void handle_client_message(XEvent *e) {
   XClientMessageEvent *cm = &e->xclient;
-  if (cm->message_type == state_atom) {
+  if (cm->message_type == netatom[NetWMState]) {
     Client *c = find_client(cm->window);
     if (c) { // Ensure the client was found
-      if (cm->data.l[1] == fullscreen_atom ||
-          cm->data.l[2] == fullscreen_atom) {
+      if (cm->data.l[1] == netatom[NetWMFullscreen] ||
+          cm->data.l[2] == netatom[NetWMFullscreen]) {
         bool should_fullscreen =
             (cm->data.l[0] == 1) || (cm->data.l[0] == 2 && !c->fullscreen);
+        if (should_fullscreen) {
+          c->floating = false;
+        }
         set_fullscreen(c, should_fullscreen);
         focused_window = c->window;
       }
     }
   }
+}
+bool supports_protocol(Window w, Atom protocol) {
+  Atom *protocols;
+  int count;
+  if (XGetWMProtocols(display, w, &protocols, &count)) {
+    for (int i = 0; i < count; i++) {
+      if (protocols[i] == protocol) {
+        XFree(protocols);
+        return true;
+      }
+    }
+    XFree(protocols);
+  }
+  return false;
 }
 void nothing(XEvent *e) {
   // just a placehodler for events we don't handle
