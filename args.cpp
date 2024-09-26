@@ -11,6 +11,7 @@ extern std::vector<Workspace> *workspaces;
 extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Monitor> monitors; // List of monitors
+extern std::set<Window> all_windows;
 extern Monitor *current_monitor;
 extern std::vector<Client> *sticky;
 extern Cursor cursors[3];
@@ -180,6 +181,8 @@ void kill_focused_window(const Arg *arg) {
                                      return c.window == focused_window;
                                    }),
                     clients->end());
+      all_windows.erase(focused_window);
+
       // Update master window if needed
       if (focused_window == current_workspace->master) {
         current_workspace->master = None;
@@ -576,11 +579,11 @@ void movemouse(const Arg *arg) {
   XUngrabPointer(display, CurrentTime);
   Monitor *m = rect_to_mon(client->x, client->y, client->width, client->height);
   if (m && client && m->index == client->monitor) {
-      std::string log = "echo 'got monitor";
+    std::string log = "echo 'got monitor";
     log += std::to_string(m->index);
-    log += " "; 
+    log += " ";
     log += std::to_string(monitors[client->monitor].index);
-    log += " "; 
+    log += " ";
     log += std::to_string(m->width);
     log += " ";
     log += std::to_string(client->monitor);
@@ -588,7 +591,7 @@ void movemouse(const Arg *arg) {
     log += " ";
     log += "' >> /tmp/log.txt";
     system(log.c_str());
-      send_to_monitor(client, &monitors[client->monitor],m);
+    send_to_monitor(client, &monitors[client->monitor], m);
   }
   // code for monitors check it
 }
@@ -669,7 +672,7 @@ void resizemouse(const Arg *arg) {
     ;
   Monitor *m = rect_to_mon(client->x, client->y, client->width, client->height);
   if (m && client && m->index != client->monitor) {
-      send_to_monitor(client, &monitors[client->monitor],m);
+    send_to_monitor(client, &monitors[client->monitor], m);
   }
 }
 void toggle_sticky(const Arg *arg) {

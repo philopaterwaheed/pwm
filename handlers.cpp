@@ -11,6 +11,7 @@ extern Window focused_window;
 extern Monitor *current_monitor;
 extern std::vector<Monitor> monitors; // List of monitors
 extern std::vector<Workspace> *workspaces;
+extern std::set<Window> all_windows;
 extern Workspace *current_workspace;
 extern std::vector<Client> *clients;
 extern std::vector<Client> *sticky;
@@ -82,6 +83,9 @@ void handle_map_request(XEvent *e) {
   XWindowAttributes wa;
   XGetWindowAttributes(display, ev->window, &wa);
 
+  if (all_windows.find(ev->window) != all_windows.end()) {
+    return;
+  }
   focused_window = ev->window;
   if (wa.override_redirect)
     return;
@@ -97,6 +101,7 @@ void handle_map_request(XEvent *e) {
       .monitor = current_monitor->index,
   };
   clients->push_back(client);
+  all_windows.insert(ev->window);
   if (!client.floating) {
     current_workspace->master = clients->back().window;
   }
@@ -185,6 +190,7 @@ void handle_destroy_notify(XEvent *e) {
       std::remove_if(sticky->begin(), sticky->end(),
                      [&window](const Client &c) { return c.window == window; }),
       sticky->end());
+  all_windows.erase(window);
   if (window == current_workspace->master) {
     current_workspace->master = None;
   }

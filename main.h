@@ -25,6 +25,7 @@
 #include <csignal>
 #include <wait.h>
 #include <unordered_set>
+#include <set>
 
 #define HEIGHT(X) ((X)->height + 2 * BORDER_WIDTH)
 #define WIDTH(X) ((X)->width + 2  * BORDER_WIDTH)

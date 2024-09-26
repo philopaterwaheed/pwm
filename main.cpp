@@ -4,8 +4,7 @@
 #include <X11/X.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
-#include <cstdlib>
-#include <string>
+
 
 Atom delete_atom, protocol_atom, name_atom;
 
@@ -25,6 +24,7 @@ std::vector<Monitor> monitors; // List of monitors
 std::vector<Workspace> *workspaces;
 std::vector<Client> *clients;
 std::vector<Client> *sticky;
+std::set <Window> all_windows;
 
 std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
@@ -133,14 +133,6 @@ void update_bar() {
                                 BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] / 3,
                                 BAR_Y, screen, current_monitor->width);
   }
-  status = std::to_string(current_monitor->index);
-  Client *c = find_client(focused_window);
-  if (c) {
-
-    status += std::to_string(c->monitor);
-  }
-  status += std::to_string(clients->size());
-
   XftChar8 *status_utf8 =
       reinterpret_cast<XftChar8 *>(const_cast<char *>(status.c_str()));
 
@@ -640,7 +632,7 @@ void add_existing_windows() {
 
       if (attr.map_state == IsViewable && !attr.override_redirect) {
         clients->push_back({children[i]});
-
+	all_windows.insert(children[i]);
         XSelectInput(display, children[i],
                      EnterWindowMask | FocusChangeMask | PropertyChangeMask |
                          StructureNotifyMask);
