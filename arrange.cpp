@@ -54,7 +54,7 @@ void arrange_windows() {
     return;
 
   if (current_workspace->master == None && !arranged_clients.empty()) {
-    current_workspace->master = arranged_clients[0]->window;
+    current_workspace->master = arranged_clients[arranged_clients.size()-1]->window;
     current_workspace->cfacts -= arranged_clients[0]->cfact;
   }
   int screen_width =
