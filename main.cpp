@@ -133,13 +133,6 @@ void update_bar() {
                                 BUTTON_LABEL_UTF8[i], x + BUTTONS_WIDTHS[i] / 3,
                                 BAR_Y, screen, current_monitor->width);
   }
-  status = std::to_string(current_monitor->index);
-  Client *c = find_client(focused_window);
-  if (c) {
-
-    status += std::to_string(c->monitor);
-  }
-
   XftChar8 *status_utf8 =
       reinterpret_cast<XftChar8 *>(const_cast<char *>(status.c_str()));
 
@@ -314,7 +307,7 @@ void detect_monitors() {
     workspaces = &current_monitor->workspaces;
     current_workspace = &(*workspaces)[0];
     clients = &(*workspaces)[0].clients;
-    sticky = &(current_monitor->sticky);
+    sticky = &(monitors[0].sticky);
   }
 }
 
@@ -340,7 +333,6 @@ void focus_monitor(Monitor *monitor) {
                                               // this but it's what it is
   clients = &current_workspace->clients;
   sticky = &(current_monitor->sticky);
-  focused_window = None;
   update_bar();
 }
 void toggle_layout() {
@@ -581,7 +573,7 @@ Monitor *rect_to_mon(int x, int y, int w, int h) {
   Monitor *monitor;
   int a, area = 0;
 
-  for (auto m : monitors) {
+  for (auto &m : monitors) {
     a = INTERSECT(x, y, w, h, m);
     if (a > area) {
       area = a;
@@ -598,6 +590,7 @@ void send_to_monitor(Client *client, Monitor *prev_monitor,
   client->monitor = next_monitor->index;
   if (client->sticky) {
     next_monitor->sticky.push_back(*client);
+    focused_window = client->window;
     prev_monitor->sticky.erase(
         std::remove_if(
             prev_monitor->sticky.begin(), prev_monitor->sticky.end(),
@@ -608,15 +601,14 @@ void send_to_monitor(Client *client, Monitor *prev_monitor,
     next_monitor->workspaces[next_monitor->at].clients.push_back(*client);
     if (client->window == current_workspace->master) {
       current_workspace->master = None;
-      prev_monitor->workspaces[prev_monitor->at].clients.erase(
-          std::remove_if(
-              prev_monitor->workspaces[prev_monitor->at].clients.begin(),
-              prev_monitor->workspaces[prev_monitor->at].clients.end(),
-              [&client](const Client &c) {
-                return c.window == client->window;
-              }),
-          prev_monitor->workspaces[prev_monitor->at].clients.end());
     }
+    focused_window = client->window;
+    prev_monitor->workspaces[prev_monitor->at].clients.erase(
+        std::remove_if(
+            prev_monitor->workspaces[prev_monitor->at].clients.begin(),
+            prev_monitor->workspaces[prev_monitor->at].clients.end(),
+            [&client](const Client &c) { return c.window == client->window; }),
+        prev_monitor->workspaces[prev_monitor->at].clients.end());
     (rearrange) ? arrange_windows()
                 : void(); // arrange windows for next monitor
     // the bool for if we sending a float client we don't need the overhead of
