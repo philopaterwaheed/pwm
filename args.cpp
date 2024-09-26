@@ -2,6 +2,7 @@
 // args.cpp functions used in shortcuts
 #include "config.h"
 #include "main.h"
+#include <string>
 
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
@@ -36,6 +37,12 @@ void resize_focused_window_y(const Arg *arg) {
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWHeight, &changes);
+    Monitor *m =
+        rect_to_mon(c->x, c->y, c->width, c->height);
+    if (m && c && m->index != c->monitor) {
+      focus_monitor(m);
+      send_to_monitor(c, &monitors[c->monitor], m);
+    }
     movement_warp(&focused_window);
   }
 }
@@ -59,6 +66,12 @@ void resize_focused_window_x(const Arg *arg) {
 
     // Apply the new size to the window
     XConfigureWindow(display, focused_window, CWWidth, &changes);
+    Monitor *m =
+        rect_to_mon(c->x, c->y, c->width, c->height);
+    if (m && c && m->index != c->monitor) {
+      focus_monitor(m);
+      send_to_monitor(c, &monitors[c->monitor], m);
+    }
     movement_warp(&focused_window);
   }
 }
@@ -78,6 +91,12 @@ void move_focused_window_x(const Arg *arg) {
     c->x = wa.x + arg->i;
     XConfigureWindow(display, focused_window, CWX, &changes);
     XConfigureWindow(display, dummy, CWX, &changes);
+    Monitor *m =
+        rect_to_mon(c->x, c->y, c->width, c->height);
+    if (m && c && m->index != c->monitor) {
+      focus_monitor(m);
+      send_to_monitor(c, &monitors[c->monitor], m);
+    }
     movement_warp(&dummy);
   }
 }
@@ -95,6 +114,12 @@ void move_focused_window_y(const Arg *arg) {
     c->y = wa.y + arg->i;
     XConfigureWindow(display, focused_window, CWY, &changes);
     XConfigureWindow(display, dummy, CWY, &changes);
+    Monitor *m =
+        rect_to_mon(c->x, c->y, c->width, c->height);
+    if (m && c && m->index != c->monitor) {
+      focus_monitor(m);
+      send_to_monitor(c, &monitors[c->monitor], m);
+    }
     movement_warp(&dummy);
   }
 }
@@ -281,14 +306,16 @@ void toggle_floating(const Arg *arg) {
         XMoveResizeWindow(display, client->window, client->x, client->y,
                           client->width, client->height);
       }
+      // Ensure the floating window is raised above other windows
+      XRaiseWindow(display, focused_window);
     }
     // and set borders
     XSetWindowBorderWidth(
         display, focused_window,
         BORDER_WIDTH); // Set border width for floating windows */
 
-    // Ensure the floating window is raised above other windows
-    XRaiseWindow(display, focused_window);
+    // focus the monitor of the window before arranging it
+    focus_monitor(&monitors[client->monitor]);
     // Rearrange windows after toggling floating
     arrange_windows();
 
@@ -372,7 +399,6 @@ void lunch(const Arg *arg) {
   }
 }
 void exit_pwm(const Arg *arg) {
-  XCloseDisplay(display);
   cleanup();
   exit(0);
 }
@@ -447,6 +473,7 @@ void focus_next_monitor(const Arg *arg) {
   Monitor *monitor = &monitors[new_index];
   XClearWindow(display, current_monitor->bar);
   focus_monitor(monitor);
+  warp(NULL);
 }
 
 void focus_previous_monitor(const Arg *arg) {
@@ -462,6 +489,7 @@ void focus_previous_monitor(const Arg *arg) {
   Monitor *monitor = &monitors[new_index];
   XClearWindow(display, current_monitor->bar);
   focus_monitor(monitor);
+  warp(NULL);
 }
 void sendto_next_monitor(const Arg *arg) {
   if (monitors.empty() || !focused_window)
@@ -578,20 +606,10 @@ void movemouse(const Arg *arg) {
   client->y = new_y;
   XUngrabPointer(display, CurrentTime);
   Monitor *m = rect_to_mon(client->x, client->y, client->width, client->height);
-  if (m && client && m->index == client->monitor) {
-    std::string log = "echo 'got monitor";
-    log += std::to_string(m->index);
-    log += " ";
-    log += std::to_string(monitors[client->monitor].index);
-    log += " ";
-    log += std::to_string(m->width);
-    log += " ";
-    log += std::to_string(client->monitor);
-    log += " ";
-    log += " ";
-    log += "' >> /tmp/log.txt";
-    system(log.c_str());
+  if (m && client && m->index != client->monitor) {
+    focus_monitor(m);
     send_to_monitor(client, &monitors[client->monitor], m);
+    movement_warp(&focused_window);
   }
   // code for monitors check it
 }
@@ -672,7 +690,9 @@ void resizemouse(const Arg *arg) {
     ;
   Monitor *m = rect_to_mon(client->x, client->y, client->width, client->height);
   if (m && client && m->index != client->monitor) {
+    focus_monitor(m);
     send_to_monitor(client, &monitors[client->monitor], m);
+    movement_warp(&focused_window);
   }
 }
 void toggle_sticky(const Arg *arg) {
@@ -680,7 +700,7 @@ void toggle_sticky(const Arg *arg) {
   if (focused_window == None)
     return;
   Client *c = find_client(focused_window);
-  if (c && !c->fullscreen && !c->sticky) {
+  if (c && !c->fullscreen) {
     Client client = *c;
     if (client.sticky) {
       auto it = std::remove_if(sticky->begin(), sticky->end(), [&](Client &c) {
@@ -688,11 +708,13 @@ void toggle_sticky(const Arg *arg) {
       });
       client.sticky = false;
       client.floating = false;
-      current_workspace->clients.push_back(client);
-      if (it != sticky->end())
+      current_monitor->current_workspace[current_monitor->at].clients.push_back(
+          client);
+      if (it != sticky->end()) {
         sticky->erase(it);
+      }
       /* XUnmapWindow(display, focused_window); */
-    } else {
+    } else if (client.sticky == false && !client.fullscreen) {
       auto it =
           std::remove_if(clients->begin(), clients->end(),
                          [&](Client &c) { return c.window == focused_window; });
@@ -720,9 +742,10 @@ void toggle_sticky(const Arg *arg) {
       movement_warp(&focused_window);
       if (current_workspace->master == focused_window)
         current_workspace->master = None;
-      sticky->push_back(client);
-      if (it != clients->end())
+      current_monitor->sticky.push_back(client);
+      if (it != clients->end()) {
         clients->erase(it);
+      }
     }
     arrange_windows();
   }

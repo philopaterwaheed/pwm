@@ -5,7 +5,6 @@
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
 
-
 Atom delete_atom, protocol_atom, name_atom;
 
 Atom netatom[NetLast];
@@ -14,6 +13,7 @@ int screen;
 Window root; // the root window top level window all other windows are children
              // of it and covers all the screen
 Window focused_window = None;
+Window wmcheckwin;
 XftColor xft_color;
 extern Cursor cursors[3];
 
@@ -24,7 +24,7 @@ std::vector<Monitor> monitors; // List of monitors
 std::vector<Workspace> *workspaces;
 std::vector<Client> *clients;
 std::vector<Client> *sticky;
-std::set <Window> all_windows;
+std::set<Window> all_windows;
 
 std::string status = "pwm by philo";
 std::vector<XftFont *> fallbackFonts;
@@ -232,13 +232,33 @@ void cleanup() {
   XftColorFree(display, DefaultVisual(display, DefaultScreen(display)),
                DefaultColormap(display, DefaultScreen(display)), &xft_color);
 
-  for (auto font : fallbackFonts) {
+  for (auto &font : fallbackFonts) {
     XftFontClose(display, font);
   }
   XftFontClose(display, xft_font);
-  for (auto m : monitors) {
+  for (auto &m : monitors) {
+    XUnmapWindow(display, m.bar);
+    XDestroyWindow(display, m.bar);
     XftDrawDestroy(m.xft_draw);
+    for (auto &workspace : m.workspaces) {
+      for (auto &client : workspace.clients) {
+
+        XGrabServer(display); /* avoid race conditions */
+        XSetErrorHandler(0);
+        XSelectInput(display, client.window, NoEventMask);
+        XSetCloseDownMode(display, DestroyAll);
+        XKillClient(display, client.window);
+        XUngrabButton(display, AnyButton, AnyModifier, client.window);
+        XSync(display, False);
+        XUngrabServer(display);
+      }
+      workspace.clients.clear();
+    }
   }
+  XUngrabKey(display, AnyKey, AnyModifier, root);
+  XDestroyWindow(display, wmcheckwin);
+  XSync(display, False);
+  XSetInputFocus(display, PointerRoot, RevertToPointerRoot, CurrentTime);
   XCloseDisplay(display);
 }
 
@@ -307,7 +327,7 @@ void detect_monitors() {
     workspaces = &current_monitor->workspaces;
     current_workspace = &(*workspaces)[0];
     clients = &(*workspaces)[0].clients;
-    sticky = &(current_monitor->sticky);
+    sticky = &(monitors[0].sticky);
   }
 }
 
@@ -333,7 +353,6 @@ void focus_monitor(Monitor *monitor) {
                                               // this but it's what it is
   clients = &current_workspace->clients;
   sticky = &(current_monitor->sticky);
-  focused_window = None;
   update_bar();
 }
 void toggle_layout() {
@@ -467,7 +486,7 @@ void setup() {
     monitor.current_workspace = &monitor.workspaces[0];
   }
   Atom utf8string = utf8string = XInternAtom(display, "UTF8_STRING", False);
-  Window wmcheckwin = XCreateSimpleWindow(display, root, 0, 0, 1, 1, 0, 0, 0);
+  wmcheckwin = XCreateSimpleWindow(display, root, 0, 0, 1, 1, 0, 0, 0);
   XChangeProperty(display, wmcheckwin, netatom[NetWMCheck], XA_WINDOW, 32,
                   PropModeReplace, (unsigned char *)&wmcheckwin, 1);
   XChangeProperty(display, wmcheckwin, netatom[NetWMName], utf8string, 8,
@@ -593,6 +612,7 @@ void send_to_monitor(Client *client, Monitor *prev_monitor,
   client->monitor = next_monitor->index;
   if (client->sticky) {
     next_monitor->sticky.push_back(*client);
+    focused_window = client->window;
     prev_monitor->sticky.erase(
         std::remove_if(
             prev_monitor->sticky.begin(), prev_monitor->sticky.end(),
@@ -603,15 +623,14 @@ void send_to_monitor(Client *client, Monitor *prev_monitor,
     next_monitor->workspaces[next_monitor->at].clients.push_back(*client);
     if (client->window == current_workspace->master) {
       current_workspace->master = None;
-      prev_monitor->workspaces[prev_monitor->at].clients.erase(
-          std::remove_if(
-              prev_monitor->workspaces[prev_monitor->at].clients.begin(),
-              prev_monitor->workspaces[prev_monitor->at].clients.end(),
-              [&client](const Client &c) {
-                return c.window == client->window;
-              }),
-          prev_monitor->workspaces[prev_monitor->at].clients.end());
     }
+    focused_window = client->window;
+    prev_monitor->workspaces[prev_monitor->at].clients.erase(
+        std::remove_if(
+            prev_monitor->workspaces[prev_monitor->at].clients.begin(),
+            prev_monitor->workspaces[prev_monitor->at].clients.end(),
+            [&client](const Client &c) { return c.window == client->window; }),
+        prev_monitor->workspaces[prev_monitor->at].clients.end());
     (rearrange) ? arrange_windows()
                 : void(); // arrange windows for next monitor
     // the bool for if we sending a float client we don't need the overhead of
@@ -632,7 +651,7 @@ void add_existing_windows() {
 
       if (attr.map_state == IsViewable && !attr.override_redirect) {
         clients->push_back({children[i]});
-	all_windows.insert(children[i]);
+        all_windows.insert(children[i]);
         XSelectInput(display, children[i],
                      EnterWindowMask | FocusChangeMask | PropertyChangeMask |
                          StructureNotifyMask);
