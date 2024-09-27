@@ -15,9 +15,10 @@ inspired by dwm ; we can say it's a love letter to dwm  .
 - **Window Snapping**: Windows snap to the edges of the screen when moved close.
 - **Fullscreen Windows**: Support for windows requesting fullscreen mode, such as browsers in fullscreen video mode.
 - **Center Master Layout**: A layout option where the main window is centered, with other windows tiled around it.
-- **Sticky Clients**: Windows can be set as "sticky" so they remain visible across all workspaces.
+- **Sticky Clients**: Windows can be set as "sticky" so they remain visible across all workspaces **per monitor**.
 - **Resizable Borders**: Configurable window borders, useful for visual feedback and resizing.
 - **Monitor Focus and Workspace Movement**: Easily switch focus between monitors based on mouse movement and keyboard shortcuts.
+
 
 ## Dependencies
 
@@ -91,7 +92,8 @@ but those are the default
 | `Mod + Alt + g`               | Switch to grid layout                  |
 | `Mod + ,`                     | Focus next monitor                     |
 | `Mod + .`                     | Focus previous monitor                 |
-
+| `Mod + Shift + ,`             | Move focused window to next monitor    |
+| `Mod + Shift + .`             | Move focused window to previous monitor|
 ### Mouse Actions
 
 - **Move Window**: Hold `Mod` + Left Click to drag a floating window.
@@ -161,6 +163,7 @@ This window manager is released under the MIT License.
 
 # screen shots
 ![2024-09-23_06-13](https://github.com/user-attachments/assets/0010defd-ab08-4cd8-a8f7-86ba099cab38)
-![2024-09-23_06-27](https://github.com/user-attachments/assets/8c93975a-fc55-480f-9dca-c623a04b3d54)
-![2024-09-23_06-29](https://github.com/user-attachments/assets/a0be1844-4d0f-4902-823d-aea5e781af53)
+![image](https://github.com/user-attachments/assets/a341bdf3-652e-4808-9870-92d19aef1527)
+![image](https://github.com/user-attachments/assets/98850e65-9f77-4f7f-9ff8-45081194c163)
 ![2024-09-23_06-31](https://github.com/user-attachments/assets/9a10e87a-3362-4b32-908a-c93297595b50)
+![image](https://github.com/user-attachments/assets/0ba06944-b0ba-46ce-8c52-3a8f41ae4a80)
