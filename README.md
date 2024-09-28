@@ -40,6 +40,10 @@ This window manager is built using the X11 library. Ensure that you have the fol
   ```bash
   sudo apt-get install libfontconfig1-dev
   ```
+- **Xcursor**: For cursors in the X11 enviroment.
+  ```bash
+  sudo apt install libxcursor-dev
+  ```
 
 ## Installation
 
