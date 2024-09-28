@@ -28,6 +28,10 @@ This window manager is built using the X11 library. Ensure that you have the fol
   ```bash
   sudo apt-get install libx11-dev
   ```
+- **Xft**: For the font reading 
+  ``` bash
+  sudo apt install libxft-dev
+  ```
 - **Xinerama**: For multi-monitor support.
   ```bash
   sudo apt-get install libxinerama-dev
