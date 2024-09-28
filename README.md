@@ -41,7 +41,7 @@ This window manager is built using the X11 library. Ensure that you have the fol
 
 1. **Clone the repository**:
    ```bash
-   git https://github.com/philopaterwaheed/pwm.git
+   git clone https://github.com/philopaterwaheed/pwm.git
    cd pwm
    ```
 
