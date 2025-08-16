@@ -226,8 +226,13 @@ void update_status(XEvent *ev) {
 void grab_keys() {
   // it only lets the window manager to listen to the key presses we specify
   for (auto shortcut : shortcuts) {
-    XGrabKey(display, XKeysymToKeycode(display, shortcut.key), shortcut.mask,
-             root, True, GrabModeAsync, GrabModeAsync);
+    KeyCode keycode = XKeysymToKeycode(display, shortcut.key);
+    // Grab keys for all possible numlock/capslock combinations
+    unsigned int modifiers[] = { 0, LockMask, numlockmask, numlockmask|LockMask };
+    for (int i = 0; i < 4; i++) {
+      XGrabKey(display, keycode, shortcut.mask | modifiers[i],
+               root, True, GrabModeAsync, GrabModeAsync);
+    }
   }
 }
 void cleanup() {
