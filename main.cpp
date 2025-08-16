@@ -4,6 +4,7 @@
 #include <X11/X.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
+#include <X11/keysym.h>
 
 Atom delete_atom, protocol_atom, name_atom;
 
@@ -418,6 +419,21 @@ void grabbuttons() {
     XGrabButton(display, buttons[i].id, buttons[i].mask, root, False,
                 BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
 }
+
+void updatenumlockmask(void) {
+    unsigned int i, j;
+    XModifierKeymap *modmap;
+
+    numlockmask = 0;
+    modmap = XGetModifierMapping(display);
+    for (i = 0; i < 8; i++)
+        for (j = 0; j < modmap->max_keypermod; j++)
+            if (modmap->modifiermap[i * modmap->max_keypermod + j]
+                == XKeysymToKeycode(display, XK_Num_Lock))
+                numlockmask = (1 << i);
+    XFreeModifiermap(modmap);
+}
+
 void setup() {
   XSetWindowAttributes wa;
   // init atoms
@@ -437,6 +453,9 @@ void setup() {
   netatom[NetClientInfo] = XInternAtom(display, "_NET_CLIENT_INFO", False);
   netatom[NetToolBar] = XInternAtom(display, "_NET_TOOLBAR", False);
   netatom[NetUtility] = XInternAtom(display, "_NET_UTILITY", False);
+
+  // detect numlock mask
+  updatenumlockmask();
 
   // initing cursors
   cursors[CurNormal] = cur_create(XC_left_ptr);
