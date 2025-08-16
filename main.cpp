@@ -5,6 +5,7 @@
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
+#include <cstdio>
 
 Atom delete_atom, protocol_atom, name_atom;
 
@@ -426,12 +427,25 @@ void updatenumlockmask(void) {
 
     numlockmask = 0;
     modmap = XGetModifierMapping(display);
-    for (i = 0; i < 8; i++)
-        for (j = 0; j < modmap->max_keypermod; j++)
+    for (i = 0; i < 8; i++) {
+        for (j = 0; j < modmap->max_keypermod; j++) {
             if (modmap->modifiermap[i * modmap->max_keypermod + j]
-                == XKeysymToKeycode(display, XK_Num_Lock))
+                == XKeysymToKeycode(display, XK_Num_Lock)) {
                 numlockmask = (1 << i);
+                break;
+            }
+        }
+        if (numlockmask) break;
+    }
     XFreeModifiermap(modmap);
+    
+    // Fallback: NumLock is usually Mod2Mask on most systems
+    if (numlockmask == 0) {
+        numlockmask = Mod2Mask;
+        printf("NumLock mask fallback to Mod2Mask: 0x%x\n", numlockmask);
+    } else {
+        printf("NumLock mask detected: 0x%x\n", numlockmask);
+    }
 }
 
 void setup() {

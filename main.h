@@ -32,8 +32,8 @@
 #define BUTTONMASK              (ButtonPressMask|ButtonReleaseMask)
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define CLEANMASK(mask)                                                        \
-  (mask & ~(numlockmask|LockMask) & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
-           Mod4Mask | Mod5Mask))
+  (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask |          \
+           Mod4Mask | Mod5Mask) & ~(numlockmask|LockMask))
 #define INTERSECT(x,y,w,h,m)    (std::max(0, std::min((x)+(w),(m).x+(m).width) - std::max((x),(m).x)) \
                                * std::max(0, std::min((y)+(h),(m).y+(m).height) - std::max((y),(m).y)))
 
