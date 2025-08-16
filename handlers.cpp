@@ -3,6 +3,7 @@
 #include "main.h"
 #include <X11/Xlib.h>
 #include <string>
+#include <cstdio>
 
 extern Display *display; // the connection to the X server
 extern Window root; // the root window top level window all other windows are
@@ -21,6 +22,7 @@ extern Atom netatom[NetLast];
 extern int BUTTONS_WIDTHS[NUM_WORKSPACES + 1];
 extern int BUTTONS_WIDTHS_PRESUM[NUM_WORKSPACES +
                                  1]; // a presum array for button widths
+extern unsigned int numlockmask;
 
 void handle_button_press_event(XEvent *e) {
   XButtonPressedEvent *ev = &e->xbutton;
@@ -152,9 +154,17 @@ void handle_key_press(XEvent *e) {
   XKeyEvent *ev = &e->xkey;
   for (auto shortcut : shortcuts) {
     // the state is a bit mask and is true only when the key is mod
-    if (ev->keycode == XKeysymToKeycode(display, shortcut.key) &&
-        (CLEANMASK(ev->state) == CLEANMASK(shortcut.mask)) && shortcut.func)
+    KeyCode shortcut_keycode = XKeysymToKeycode(display, shortcut.key);
+    unsigned int cleaned_ev_state = CLEANMASK(ev->state);
+    unsigned int cleaned_shortcut_mask = CLEANMASK(shortcut.mask);
+    
+    if (ev->keycode == shortcut_keycode &&
+        cleaned_ev_state == cleaned_shortcut_mask && shortcut.func) {
+      printf("Matched shortcut: keycode=%d, shortcut_mask=0x%x, cleaned_shortcut=0x%x\n",
+             shortcut_keycode, shortcut.mask, cleaned_shortcut_mask);
       shortcut.func(&(shortcut.arg));
+      return;
+    }
   }
 }
 void handle_motion_notify(XEvent *e) {

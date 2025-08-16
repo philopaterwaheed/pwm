@@ -4,6 +4,9 @@
 #include <X11/X.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
+#include <X11/keysym.h>
+#include <cstdio>
+unsigned int numlockmask = 0;
 
 Atom delete_atom, protocol_atom, name_atom;
 
@@ -222,10 +225,20 @@ void update_status(XEvent *ev) {
   }
 }
 void grab_keys() {
-  // it only lets the window manager to listen to the key presses we specify
+  // Clear any existing key grabs
+  XUngrabKey(display, AnyKey, AnyModifier, root);
+  
+  // Grab keys for all combinations of numlock and capslock states
   for (auto shortcut : shortcuts) {
-    XGrabKey(display, XKeysymToKeycode(display, shortcut.key), shortcut.mask,
-             root, True, GrabModeAsync, GrabModeAsync);
+    KeyCode keycode = XKeysymToKeycode(display, shortcut.key);
+    
+    // Grab the key with all possible combinations of numlock and capslock
+    unsigned int modifiers[] = { 0, LockMask, numlockmask, numlockmask|LockMask };
+    
+    for (int i = 0; i < 4; i++) {
+      XGrabKey(display, keycode, shortcut.mask | modifiers[i],
+               root, True, GrabModeAsync, GrabModeAsync);
+    }
   }
 }
 void cleanup() {
@@ -414,10 +427,28 @@ void movement_warp(Window *win) {
   XWarpPointer(display, None, *win, 0, 0, 0, 0, x, y);
 }
 void grabbuttons() {
+  updatenumlockmask();
   for (int i = 0; i < 3; i++)
     XGrabButton(display, buttons[i].id, buttons[i].mask, root, False,
                 BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
 }
+
+void
+updatenumlockmask(void)
+{
+	unsigned int i, j;
+	XModifierKeymap *modmap;
+
+	numlockmask = 0;
+	modmap = XGetModifierMapping(display);
+	for (i = 0; i < 8; i++)
+		for (j = 0; j < modmap->max_keypermod; j++)
+			if (modmap->modifiermap[i * modmap->max_keypermod + j]
+				== XKeysymToKeycode(display, XK_Num_Lock))
+				numlockmask = (1 << i);
+	XFreeModifiermap(modmap);
+}
+
 void setup() {
   XSetWindowAttributes wa;
   // init atoms
@@ -437,6 +468,9 @@ void setup() {
   netatom[NetClientInfo] = XInternAtom(display, "_NET_CLIENT_INFO", False);
   netatom[NetToolBar] = XInternAtom(display, "_NET_TOOLBAR", False);
   netatom[NetUtility] = XInternAtom(display, "_NET_UTILITY", False);
+
+  // detect numlock mask
+  updatenumlockmask();
 
   // initing cursors
   cursors[CurNormal] = cur_create(XC_left_ptr);
